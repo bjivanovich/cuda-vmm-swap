@@ -47,16 +47,20 @@ These are the models that swap in and out of VRAM in the pipeline. The Architect
 (ATX-Swift-1.5) loads once at cold start directly to VRAM and does not participate
 in hot swaps.
 
-| Model | Quantization | Size on Disk | VRAM Footprint | Wake Time | Inference Speed |
+| Model | Quantization | VRAM Footprint | Pinnable in RAM | Wake Time (RAM→VRAM) | Inference Speed |
 |---|---|---|---|---|---|
-| Cyber-ATX 27B | iQ4_XS (imatrix) | 14.3 GB | 15.8 GB | **1.71 s** | 76.90 tok/s @ 96k ctx |
-| Cyber-ATX 27B | Q5_K_M (imatrix) | 18.8 GB | 19.8 GB | **2.21 s** | 57.4 – 61.6 tok/s |
-| Gyro-Coder MoE | TQ2_0 + A8 PLE | 19.9 GB (VRAM) | 19.9 GB | 2.13 s* | 49.8 – 53.5 tok/s |
-| PCIe Gen4 x16 | — | — | — | 8.44 GB/s | — |
+| Cyber-ATX 27B | iQ4_XS (imatrix) | 15.8 GB | 14.3 GB | **1.71 s** | 76.90 tok/s @ 96k ctx |
+| Cyber-ATX 27B | Q5_K_M (imatrix) | 19.8 GB | 18.8 GB | **2.21 s** | 57.4 – 61.6 tok/s |
+| Gyro-Coder MoE | TQ2_0 (expert layers) | **19.9 GB** | **19.9 GB** | **~2.3 s** | 49.8 – 53.5 tok/s |
+| PCIe Gen4 x16 | — | — | — | 8.44 GB/s sustained | — |
 
-> *Gyro-Coder's 75.8 GB total file exceeds 48 GB RAM, so it cannot be pre-staged in
-> pinned host RAM on this system. Its experts (19.9 GB) load to VRAM via NVMe mmap.
-> The 2.13 s figure is from the raw VRAM transfer benchmark; cold NVMe start takes ~45 s.
+> **How Gyro-Coder fits:** The model has two distinct components:
+> - **Expert / tensor layers (TQ2_0):** 19.9 GB — loaded into VRAM. Fits comfortably in the RTX 3090's 24 GB.
+> - **N-gram / PLE table (Q8/A8):** ~54–58 GB — stays on NVMe and is accessed via `mmap` at near-zero latency during inference. Never loaded into RAM or VRAM.
+>
+> Only the 19.9 GB expert layers participate in VMM hot-swap. They can be fully pre-staged
+> in pinned host RAM (19.9 GB < 24 GB WDDM cap), making Gyro-Coder a full participant
+> in the sliding window pipeline.
 
 **Additional quantization benchmarks are pending.** To contribute results from your
 hardware, see the [benchmarks](benchmarks/) folder.
@@ -65,13 +69,13 @@ hardware, see the [benchmarks](benchmarks/) folder.
 
 ## Cold Start Times (for reference)
 
-| Model | Load Method | Cold Start Time |
-|---|---|---|
-| ATX-Swift-1.5 Q5_K_M | VRAM direct (NVMe, `--load-mode none`) | ~22 s |
-| Gyro-Coder TQ2_0 | VRAM + NVMe mmap (expert layers) | ~45 s |
-| Cyber-ATX iQ4_XS | Pre-staged in pinned RAM then wake | < 2 s after staging |
+| Model | Load Method | Cold Start Time | Notes |
+|---|---|---|---|
+| ATX-Swift-1.5 Q5_K_M | NVMe → VRAM (`--load-mode none`) | ~22 s | Loads once per session |
+| Gyro-Coder TQ2_0 | Expert layers (19.9 GB) NVMe → VRAM; N-gram/PLE mmap | ~45 s | N-gram table (~54–58 GB) stays on disk |
+| Cyber-ATX iQ4_XS | Pre-staged in pinned RAM → VMM wake | < 2 s | After initial staging |
 
-Cold start happens once per session. After that, all swaps use the VMM hot path.
+Cold start happens once per session. All subsequent swaps use the VMM hot path.
 
 ---
 
@@ -246,11 +250,12 @@ Tests included:
 
 ## Known Limitations
 
-- **Gyro-Coder cannot be pre-staged in pinned RAM** on a 48 GB system (75.8 GB file > RAM). It loads via NVMe mmap. Cold start is ~45 s; only the expert layers (19.9 GB) reside in VRAM.
-- **Windows WDDM pinned RAM cap**: ~50% of physical RAM. With 48 GB, max pinnable at once is ~24 GB. Sliding window required.
+- **Gyro-Coder N-gram / PLE table is NOT in VRAM or RAM.** The ~54–58 GB N-gram table lives on NVMe and is accessed via `mmap`. Only the 19.9 GB expert layers reside in VRAM and participate in VMM hot-swap. Cold start (~45 s) loads those expert layers from NVMe once per session.
+- **Windows WDDM pinned RAM cap**: ~50% of physical RAM. With 48 GB, max pinnable at once is ~24 GB. All three models' VRAM footprints (14.3–19.9 GB each) are individually under this cap, enabling the sliding window pattern.
 - **VMM requires Volta+ (cc 7.0+)**. Pascal (GTX 10xx, cc 6.x) is not supported.
 - **The patch targets a specific llamAmpere-Ultra snapshot**. Upstream llama.cpp API changes may require minor adjustments to the patch script.
 - **Linux**: The WDDM pinned memory limit does not apply. The sliding window is still good practice but the `cudaErrorMemoryAllocation` failure mode is Windows-specific.
+- **Gyro-Coder requires the AgentionAI fork engine** for TQ2_0 + A8 PLE N-gram support. It will not run on upstream llama.cpp.
 
 ---
 
