@@ -1,0 +1,46 @@
+{
+  "router_host": "127.0.0.1",
+  "router_port": 8000,
+  "vmm_sleep_idle_seconds": 3,
+  "sliding_window_enabled": true,
+  "models": {
+    "architect": {
+      "alias": "ATX-Swift-1.5-Qwen3.8-27B-Uncensored-Q5_K_M",
+      "model_path": "D:/models/ATX-Swift-1.5-Qwen3.8-27B-Uncensored-MTP-i1-Q5_K_M.gguf",
+      "backend_port": 8081,
+      "role": "Architect",
+      "context": 163840,
+      "kv_cache": "turbo5 / turbo4",
+      "vram_gb": 18.8,
+      "speculative": "MTP Q8 Head"
+    },
+    "coder": {
+      "alias": "Qwen3.8-Flash-Next-Gyro-Coder-TQ2_0",
+      "model_path": "D:/models/Qwen3.8-Flash-Next-Gyro-Coder-TQ2_0.gguf",
+      "backend_port": 8082,
+      "role": "Coder",
+      "context": 98304,
+      "kv_cache": "q8_0",
+      "vram_gb": 19.9,
+      "speculative": "A8 PLE N-Gram (NVMe mmap)"
+    },
+    "debugger": {
+      "alias": "Cyber-ATX-27B-Uncensored-Q5_K_M",
+      "model_path": "D:/models/Qwen3.8-27B-Uncensored-Cyber-ATX-i1-Q5_K_M.gguf",
+      "backend_port": 8083,
+      "role": "Debugger / Security Auditor",
+      "context": 163840,
+      "kv_cache": "turbo5 / turbo4",
+      "vram_gb": 18.8,
+      "speculative": "MTP Q8 Head"
+    }
+  },
+  "aliases": {
+    "swift": "architect",
+    "atx-swift": "architect",
+    "gyro": "coder",
+    "gyro-coder": "coder",
+    "cyber": "debugger",
+    "cyber-atx": "debugger"
+  }
+}

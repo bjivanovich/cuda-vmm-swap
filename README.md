@@ -263,6 +263,60 @@ $env:GGML_CUDA_FA_I8QK        = "1"
 
 ---
 
+## Agent Harness, Tool & MCP Integrations
+
+To make the sub-2.3s VMM swap immediately usable in production without manual process orchestration, three integration layers are provided:
+
+### 1. OpenAI-Compatible Fast-Swap Router (`router/vmm_router.py`)
+
+A high-performance reverse proxy that exposes a standard `/v1/chat/completions` endpoint on `http://127.0.0.1:8000/v1`.
+
+```bash
+# Start the VMM Router
+python router/vmm_router.py
+```
+
+**Works out-of-the-box with any agent harness or IDE:**
+* **`pi-coding-agent` / `Aider` / `OpenHands`**:
+  ```bash
+  export OPENAI_API_BASE="http://127.0.0.1:8000/v1"
+  export OPENAI_API_KEY="not-needed"
+  ```
+* **Cursor / Continue.dev / LibreChat**:
+  Set Provider to **OpenAI Compatible**, Base URL to `http://127.0.0.1:8000/v1`.
+* **Model Selection**: Send `"model": "architect"`, `"model": "coder"`, or `"model": "debugger"`. The router checks VRAM residency, triggers the <60ms eviction and sub-2.3s DMA wake automatically, and streams tokens to the client.
+
+### 2. Autonomous 3-Agent Pipeline (`pipeline/autonomous_pipeline.py`)
+
+An end-to-end command-line runner that executes the full engineering triad on a task:
+1. **Architect** writes the system design and interface contracts.
+2. Swaps to **Coder** (<2.3s DMA) to synthesize implementation and `unittest` suites.
+3. Automatically executes the generated code in a Python sandbox to capture exit codes.
+4. Swaps to **Debugger** (<2.3s DMA) to audit for race conditions, seal vulnerabilities, and fix errors.
+
+```bash
+python pipeline/autonomous_pipeline.py --task "Create an async telemetry server with shared memory ring buffers"
+```
+
+### 3. Model Context Protocol (MCP) Server (`mcp/vmm_mcp_server.py`)
+
+Integrates directly into **Google Antigravity IDE**, **Claude Desktop**, or **Cursor** via standard stdio JSON-RPC.
+
+Add to your MCP configuration (`claude_desktop_config.json` or Antigravity MCP settings):
+```json
+{
+  "mcpServers": {
+    "llamampere-vmm": {
+      "command": "python",
+      "args": ["C:/path/to/llamampere-vmm-swap/mcp/vmm_mcp_server.py"]
+    }
+  }
+}
+```
+Exposes `vmm_list_models`, `vmm_swap_model`, and `vmm_query_agent` tools natively to your AI assistant.
+
+---
+
 ## Benchmarks & Reproduction
 
 To compile and verify raw PCIe DMA transfer speeds and VMM unmapping independent of `llama.cpp`:
