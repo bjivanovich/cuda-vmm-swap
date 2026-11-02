@@ -7,6 +7,8 @@ Patch, architecture, and benchmarks for a custom `llama.cpp` fork (**llamAmpere-
 > **Credit & Acknowledgement:** The core low-level VMM `sleep` / `wake` concept was pioneered by Reddit user
 > **u/enndeeee** in [Infernix PR #43](https://github.com/infernix/llama.cpp/pull/43) (`SleepableBuffer`).
 > This repository adapts and expands that approach for Windows 11 / WDDM driver limitations, multi-model agent switching, background pre-staging, and the `llamAmpere-Ultra` execution engine.
+>
+> **Full Engine Repository:** Looking for the complete `llama.cpp` fork with Ampere tensor-core kernels (SM86) and native Gyro-Coder TQ2_0 support built-in? See **[llamAmpere-Ultra](https://github.com/bjivanovich2017/llamAmpere-Ultra)**. This repository serves as the standalone patch, benchmark suite, router, and integration layer.
 
 ---
 
