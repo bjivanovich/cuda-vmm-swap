@@ -56,9 +56,32 @@ Captured from a live run of the autonomous 3-agent software engineering pipeline
 ### Disambiguation: Physical Swap vs Prefill vs Decode
 
 To evaluate end-to-end performance accurately, the timing components are separated:
-1. **Physical VMM Swap Time (`< 2.3s`)**: The physical time required by `cuMemMap` + PCIe Gen4 x16 DMA to transfer the active model layers from host pinned memory into device VRAM. This is independent of context size or prompt length.
-2. **Prefill / Prompt Processing Time**: The time required to evaluate the prompt tokens. Ingesting a concise prompt (118 tokens) takes ~520 ms, while ingesting a large multi-page architecture blueprint (2,186 tokens) takes ~7.2 seconds. On SM86 with MMA-fused FlashAttention, prefill throughput reaches **up to 750 tok/s**.
+1. **Physical VMM Swap Time (`< 2.3s`)**: The physical time required by `cuMemMap` + PCIe 3.0 x16 DMA to transfer the active model layers from host pinned memory into device VRAM. This is independent of context size or prompt length.
+2. **Prefill / Prompt Processing Time**: The time required to evaluate the prompt tokens. Ingesting a concise prompt (118 tokens) takes ~520 ms, while ingesting a large multi-page architecture blueprint (2,186 tokens) takes ~7.2 seconds. On SM86 with MMA-fused FlashAttention, prefill throughput reaches **up to 750-1010 tok/s**.
 3. **Decode / Token Generation Time**: The autoregressive generation phase. On Ampere SM86, dense 27B Q5_K_M models generate sustained tokens at **42-53 tok/s** with MTP, while 27B iQ4_XS reaches **76.90 tok/s**.
+
+## Deep Pipeline Benchmark 2: Full vs Incremental Conditioned Debugger
+
+Evaluates the architectural breakthrough proposed: using an automated sandbox gatekeeper to condition the Debugger's input instead of blindly re-processing the entire codebase.
+
+*Hardware: RTX 3090 24GB | PCIe 3.0 x16 | Context 96k | Windows 11 WDDM*
+
+| Pipeline Stage | Tokens In (Prefill) | Prefill Speed | Tokens Out (Decode) | Decode Speed | Stage Time | Sandbox Verdict |
+|---|---|---|---|---|---|---|
+| **Stage 1: Architect (Swift Q5)** | 212 tok | 313.75 tok/s (675 ms) | 2,200 tok | 40.11 tok/s | 55.51 s | Blueprint synthesized |
+| **Stage 2: Coder (Gyro MoE TQ2)** | 2,335 tok | 285.75 tok/s (8.17 s) | 3,500 tok | 43.27 tok/s | 89.07 s | `Exit Code 1` (NameError: memview) |
+| **Sandbox Gatekeeper (Python)** | N/A | N/A | N/A | N/A | **0.122 s** | Trapped exception deterministically |
+| **Stage 3A: Debugger (Full Mode)** | 2,492 tok | 1,010.67 tok/s (2.46 s)| 3,500 tok | 36.80 tok/s | **97.59 s** | Re-emitted whole codebase |
+| **Stage 3B: Debugger (Incremental)**| **203 tok** | 437.77 tok/s (463 ms) | **600 tok** | 35.01 tok/s | **17.74 s** | Surgical patch: `memview` -> `memoryview` |
+
+### Head-to-Head Comparison (Stage 3 Debugger)
+
+| Metric | Modalidad Full (Tradicional) | Modalidad Incremental (Condicionada) | Ahorro / Ganancia |
+|---|---|---|---|
+| **Prompt Tokens (In)** | 2,492 tokens | **203 tokens** | **-91.9% tokens** |
+| **Generated Tokens (Out)** | 3,500 tokens | **600 tokens** | **-82.9% tokens** |
+| **Stage Execution Time** | 97.592 seconds | **17.741 seconds** | **-81.8% tiempo (5.5x speedup)** |
+| **Defect Detection Accuracy** | 100% (fixed `memview` typo) | 100% (fixed `memview` typo) | **Identica precision forense** |
 
 ## Baseline Comparison
 
