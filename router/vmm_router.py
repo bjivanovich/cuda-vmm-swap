@@ -54,6 +54,7 @@ class VMMStateManager:
         self.staged_ram_model: Optional[str] = None
         self.last_swap_latency: float = 0.0
         self.swap_history = []
+        self._lock = asyncio.Lock()  # Mutual exclusion lock to prevent concurrent swap collisions
 
     def resolve_model(self, requested_name: str) -> str:
         req = requested_name.lower().strip()
@@ -69,29 +70,30 @@ class VMMStateManager:
         return "architect"
 
     async def ensure_active(self, target_model: str) -> float:
-        """Transitions VRAM if needed. Returns swap latency in seconds."""
-        if self.active_vram_model == target_model:
-            return 0.0
+        """Transitions VRAM if needed under strict mutual exclusion lock. Returns swap latency in seconds."""
+        async with self._lock:
+            if self.active_vram_model == target_model:
+                return 0.0
 
-        t0 = time.perf_counter()
-        prev_model = self.active_vram_model
-        logger.info(f"🔄 VMM SWAP TRIGGERED: '{prev_model}' -> '{target_model}'")
+            t0 = time.perf_counter()
+            prev_model = self.active_vram_model
+            logger.info(f"🔄 VMM SWAP TRIGGERED: '{prev_model}' -> '{target_model}'")
 
-        # In llamampere-vmm-swap, when the previous model goes idle, cuMemUnmap
-        # unbinds VRAM in <60ms. When a request hits the target model's port,
-        # the server wakes via PCIe DMA in <2.3s.
-        self.active_vram_model = target_model
-        t1 = time.perf_counter()
-        swap_time = t1 - t0
-        self.last_swap_latency = swap_time
-        self.swap_history.append({
-            "from": prev_model,
-            "to": target_model,
-            "timestamp": time.time(),
-            "latency_s": round(swap_time, 4)
-        })
-        logger.info(f"⚡ VMM SWAP READY in {swap_time:.3f}s. Active VRAM model: {target_model}")
-        return swap_time
+            # In llamampere-vmm-swap, when the previous model goes idle, cuMemUnmap
+            # unbinds VRAM in <60ms. When a request hits the target model's port,
+            # the server wakes via PCIe DMA in <2.3s.
+            self.active_vram_model = target_model
+            t1 = time.perf_counter()
+            swap_time = t1 - t0
+            self.last_swap_latency = swap_time
+            self.swap_history.append({
+                "from": prev_model,
+                "to": target_model,
+                "timestamp": time.time(),
+                "latency_s": round(swap_time, 4)
+            })
+            logger.info(f"⚡ VMM SWAP READY in {swap_time:.3f}s. Active VRAM model: {target_model}")
+            return swap_time
 
 state = VMMStateManager()
 
