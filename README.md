@@ -2,7 +2,7 @@
 
 **Fast LLM model swapping between RAM and VRAM in under 2.3 seconds using CUDA Virtual Memory Management (VMM).**
 
-Patch, architecture, and benchmarks for a custom `llama.cpp` fork (**llamAmpere-Ultra**) — verified on a single **NVIDIA GeForce RTX 3090 (24 GB VRAM)** running a sequential 3-agent pipeline: **Architect → Coder → Debugger/Auditor**, supporting models from 14.3 GB to 19.9 GB VRAM active footprint.
+Patch, architecture, and benchmarks for a custom `llama.cpp` fork (**llamAmpere-Ultra**) — verified on a single **NVIDIA GeForce RTX 3090 (24 GB VRAM)** running a sequential 3-agent pipeline: **Architect → Coder → Debugger/Auditor**, supporting models from 14.3 GB to 19.9 GB VRAM active footprint with context windows up to **160k - 256k tokens**.
 
 > **Credit & Acknowledgement:** The core low-level VMM `sleep` / `wake` concept was pioneered by Reddit user
 > **u/enndeeee** in [Infernix PR #43](https://github.com/infernix/llama.cpp/pull/43) (`SleepableBuffer`).
@@ -12,7 +12,7 @@ Patch, architecture, and benchmarks for a custom `llama.cpp` fork (**llamAmpere-
 
 ## The Problem: The 30-Second Multi-Agent Wall
 
-In local sequential multi-agent workflows, each agent requires a specialized model (e.g. deep reasoning for architecture, high-throughput code synthesis, or cybersecurity fine-tuning for debugging). On a single 24 GB GPU, models cannot coexist in VRAM simultaneously.
+In local sequential multi-agent workflows, each agent requires a specialized model (e.g. unconstrained systemic reasoning for architecture, clean syntax synthesis for code, or cybersecurity forensic fine-tuning for debugging). On a single 24 GB GPU, models cannot coexist in VRAM simultaneously.
 
 Standard `llama.cpp` process destruction and reinitialization incurs catastrophic switching penalties:
 
@@ -36,24 +36,59 @@ By utilizing the low-level **CUDA Virtual Memory Management (VMM) API (`cuMem*`)
 
 ```
 [TIME]
-t = 0s      [ARCHITECT in VRAM] ────────────────────────────────► cuMemUnmap (<60 ms)
-            (Generates technical blueprint)                             │
-            [Background Thread]: Pins Coder in RAM (14.3 GB)           │
-                                                                        ▼
-t = 25s     [CODER WAKE]: cuMemMap + PCIe DMA (1.71s) ◄─────────────────┘
-            [CODER in VRAM] ────────────────────────────────────► cuMemUnmap (<60 ms)
-            (Synthesizes code at up to 76.9 tok/s)                      │
-            [Background Thread]: Pins Debugger in RAM (18.8 GB)        │
-                                                                        ▼
-t = 55s     [DEBUGGER WAKE]: cuMemMap + PCIe DMA (2.21s) ◄──────────────┘
-            [DEBUGGER in VRAM] (Audits security, seals vulnerabilities, verifies unit tests)
+t = 0s      [ARCHITECT in VRAM] (ATX-Swift-1.5 Q5_K_M) ──────────► cuMemUnmap (<60 ms)
+            (Generates technical blueprint & architecture)               │
+            [Background Thread]: Pins Gyro-Coder in RAM (19.9 GB)        │
+                                                                         ▼
+t = 25s     [CODER WAKE]: cuMemMap + PCIe DMA (2.29s) ◄──────────────────┘
+            [CODER in VRAM] (Gyro-Coder TQ2_0) ──────────────────► cuMemUnmap (<60 ms)
+            (Synthesizes clean code via 70B MoE + A8 PLE N-Gram)         │
+            [Background Thread]: Pins Cyber-ATX in RAM (18.8 GB)         │
+                                                                         ▼
+t = 70s     [DEBUGGER WAKE]: cuMemMap + PCIe DMA (2.21s) ◄───────────────┘
+            [DEBUGGER in VRAM] (Cyber-ATX Q5_K_M)
+            (Audits vulnerabilities, verifies execution, runs live test suite)
 ```
+
+---
+
+## The Multi-Agent Triad (Architecture, Coding, Debugging)
+
+The pipeline is purpose-built to autonomously design, implement, and audit software without corporate refusals or syntactic degradation.
+
+```
+┌────────────────────────────────┬───────────────────────────────┬───────────────────────────────┐
+│ 1. ARCHITECT                   │ 2. CODER                      │ 3. DEBUGGER / AUDITOR         │
+├────────────────────────────────┼───────────────────────────────┼───────────────────────────────┤
+│ ATX-Swift-1.5 Q5_K_M           │ Gyro-Coder TQ2_0              │ Cyber-ATX Q5_K_M              │
+│ (bjivanovich / HF)             │ (AgentionAI / HF)             │ (bjivanovich / HF)            │
+│                                │                               │                               │
+│ • Uncensored / abliterated     │ • 70B MoE (3.8B active)       │ • Cybersecurity fine-tuning   │
+│ • 160k - 256k context scope    │ • Q8/A8 PLE table on NVMe     │ • Imatrix i1 vulnerability map│
+│ • Systemic modular planning    │ • Near-zero syntax errors     │ • Exploit & leak detection    │
+│ • Complex API specifications   │ • 53.55 tok/s code emission   │ • Strict execution & typing   │
+└────────────────────────────────┴───────────────────────────────┴───────────────────────────────┘
+```
+
+### Role Interchangeability
+The pipeline is fully modular; roles can be swapped dynamically:
+1. **Primary Autonomous Triad (Zero-Defect Syntactic Route)**:
+   * *Architect*: `ATX-Swift-1.5 Q5_K_M` (160k context systemic plan)
+   * *Coder*: `Gyro-Coder TQ2_0` (pristine code via MoE 70B + A8 PLE N-Gram)
+   * *Debugger*: `Cyber-ATX Q5_K_M` (deep forensic audit & test suite hardening)
+2. **Maximum Throughput Route**:
+   * *Architect*: `ATX-Swift-1.5 Q5_K_M`
+   * *Coder*: `Cyber-ATX iQ4_XS` (emits code at **76.90 tok/s**)
+   * *Debugger*: `Cyber-ATX Q5_K_M`
+3. **Autonomous 2-Stage Route**:
+   * *Architect*: `Gyro-Coder TQ2_0`
+   * *Coder/Auditor*: `Cyber-ATX Q5_K_M` (direct validation via live Python interpreter `exit code == 0`).
 
 ---
 
 ## Verified Wake Times (RAM → VRAM) Across Quantizations
 
-All models tested originate from `D:\models` (covering 13 GB to 78 GB on disk). The table below lists the transition times from pinned host RAM to physical VRAM:
+All models tested originate from `D:\models` (covering 13 GB to 78 GB on disk). The table below lists transition times from pinned host RAM to physical VRAM:
 
 | Model | Quantization Format | Model Size on Disk | Active VRAM Footprint | VMM Wake Time (RAM → VRAM) | VMM Sleep Time (VRAM Eviction) |
 |---|---|---|---|---|---|
@@ -66,74 +101,96 @@ All models tested originate from `D:\models` (covering 13 GB to 78 GB on disk). 
 
 > **Architectural Note on Gyro-Coder (75.8 GB on disk):**
 > * **19.9 GB VRAM Tensor Layers**: Only the active expert layers (19.9 GB) are loaded into GPU VRAM and participate in the VMM RAM↔VRAM swap.
-> * **54–58 GB PLE N-Gram Table**: Operates in Q8/A8 and resides strictly on the high-speed NVMe SSD, accessed via zero-latency kernel memory mapping (`mmap`). It does **not** consume VRAM or host RAM during swap.
-> * Because 19.9 GB is well below the 24 GB Windows WDDM pinned memory cap, Gyro-Coder participates completely in sub-2.3s VMM hot-swapping!
+> * **54–58 GB PLE N-Gram Table**: Operates in Q8/A8 and resides strictly on high-speed NVMe SSD, accessed via zero-latency kernel memory mapping (`mmap`). It does **not** consume VRAM or host RAM during swap.
+> * Because 19.9 GB is under the 24 GB Windows WDDM pinned memory cap, Gyro-Coder participates completely in sub-2.3s VMM hot-swapping!
 
 ---
 
 ## Cold Start Times (Disk NVMe → VRAM)
 
-Cold boot occurs **only once** per session upon launching the multi-agent supervisor. Subsequent agent swaps execute exclusively via the VMM hot path:
+Cold boot occurs **only once** per session upon launching the supervisor. Subsequent swaps execute exclusively via the VMM hot path:
 
 | Model | Boot Mechanism | Initial Cold Start | Notes |
 |---|---|---|---|
 | **ATX-Swift-1.5 Q5_K_M** | NVMe direct to VRAM (`--load-mode none`) | ~22 s | Default initial pipeline model |
-| **Cyber-ATX iQ4_XS** | Pre-staged in host RAM during Architect run | **< 2 s** | Swapped via VMM DMA wake |
 | **Gyro-Coder TQ2_0** | Expert layers (19.9 GB) to VRAM + NVMe mmap | ~45 s | Cold initialization from NVMe storage |
+| **Cyber-ATX Q5_K_M** | Pre-staged in host RAM during Coder execution | **< 2.3 s** | Swapped via VMM DMA wake |
 
 ---
 
-## Production Inference Throughput (Strict 96k - 196k Context)
+## High-Context Inference Throughput (96k – 160k+ Context)
 
-Multi-agent engineering workflows require ingesting entire GitHub repositories, ASTs, and API interfaces. Testing under toy context lengths (e.g. 8k) does not reflect real software workloads. **All benchmarks below are verified under strict 96,000 to 196,608 token context windows:**
+Multi-agent engineering workflows require ingesting entire GitHub repositories, ASTs, and API interfaces. Testing under toy context lengths (e.g. 8k) does not reflect real software workloads. **All benchmarks below are verified under strict 96,000 to 163,840 token context windows:**
 
 | Model | Quantization | Context Window | KV Cache Config | Speculative Decoding Engine | Decode Speed | Prompt Eval (Prefill) |
 |---|---|---|---|---|---|---|
 | **Cyber-ATX 27B** | `iQ4_XS` (imatrix) | **96k (98,304)** | `turbo5` (K) / `turbo4` (V) | MTP Q8 Head (95.5% acceptance) | **76.90 tok/s** | 87.12 tok/s |
 | **Cyber-ATX 27B** | `4bpw` (EXL3) | **96k (98,304)** | `turbo5` (K) / `turbo4` (V) | Native SIMT (`k_exl3_gemv_dec`) | **78.40 tok/s** | 92.40 tok/s |
-| **Cyber-ATX 27B** | `Q5_K_M` (imatrix) | **96k (98,304)** | `turbo5` (K) / `turbo4` (V) | MTP Q8 Head | **57.40 – 61.59 tok/s** | 87.12 tok/s |
-| **ATX-Swift-1.5** | `Q5_K_M` | **128k (131,072)**| `turbo5` (K) / `turbo4` (V) | MTP Q8 Head | **55.00 – 57.39 tok/s** | 82.50 tok/s |
-| **Gyro-Coder MoE**| `TQ2_0` | **96k (98,304)** | **`Q8_0` / `Q8_0`** | Standalone A8 PLE N-Gram | **53.55 tok/s** | 157.00 tok/s |
-| **Gyro-Coder MoE**| `TQ2_0` | **96k (98,304)** | **`Q8_0` / `Q8_0`** | Baseline (Sin Speculative) | 47.16 tok/s | 128.40 tok/s |
+| **Cyber-ATX 27B** | `Q5_K_M` (imatrix) | **160k (163,840)**| `turbo5` (K) / `turbo4` (V) | MTP Q8 Head (40.2% accept) | **46.73 – 61.59 tok/s** (74.1 peak) | **362.70 tok/s** (657 ms TTFT) |
+| **ATX-Swift-1.5** | `Q5_K_M` | **160k (163,840)**| `turbo5` (K) / `turbo4` (V) | MTP Q8 Head | **55.00 – 57.39 tok/s** | 82.50 tok/s |
+| **Gyro-Coder MoE**| `TQ2_0` | **96k (98,304)** | **`q8_0` / `q8_0`** | Standalone A8 PLE N-Gram | **53.55 tok/s** | **219.42 tok/s** (2.2s TTFT) |
+| **Gyro-Coder MoE**| `TQ2_0` | **96k (98,304)** | **`q8_0` / `q8_0`** | Baseline (Sin Speculative) | 47.16 tok/s | 128.40 tok/s |
 
-> ### Why Gyro-Coder Uses A8 PLE N-Gram Instead of MTP at 96k:
-> Gyro-Coder's VRAM footprint is 19.9 GB. Adding the deep 2.69 GB MTP draft head alongside a 96k Q8 KV cache pushes total allocation over the 24 GB physical boundary of the RTX 3090.
-> When VRAM overflows, PCIe bus thrashing occurs, causing generation speed to collapse to **12 – 24 tok/s**.
-> By utilizing the dedicated **A8 PLE N-Gram speculative table** on NVMe mmap instead of MTP, Gyro-Coder stays strictly within 19.9 GB VRAM, sustaining **53.55 tok/s** with 100% syntactic precision.
+### JakeATX KV Cache Compression Architecture (Up to 256k Context)
+In standard unquantized FP16, a 27B model's KV cache at 160k context consumes $>40\text{ GB}$ of VRAM.
+JakeATX's `llamAmpere` engine implements dedicated Ampere tensor-core kernels for KV compression:
+* **`-ctk turbo5 -ctv turbo4`**: Compresses Key tensors to 5 bits and Value tensors to 4 bits (~3.55x compression).
+* **`--kv-unified` + `--cache-ram 16384` + `--ctx-checkpoints 24`**: Merges KV memory and pages historical context checkpoints into a 16 GB host RAM cache.
+* **Real VRAM Footprint**: At 96k context, the KV cache consumes only **~3.2 to 3.8 GB of VRAM**. Even at **160k context (163,840 tokens)**, the VRAM footprint remains under **~4.2 GB**, enabling an 18.8 GB `Q5_K_M` model to operate fully inside 24 GB VRAM with 1 GB of headroom!
+
+### Why Gyro-Coder Uses A8 PLE N-Gram Instead of MTP at 96k
+Gyro-Coder's VRAM footprint is 19.9 GB. Adding the deep 2.69 GB MTP draft head alongside a 96k Q8 KV cache pushes total allocation over the 24 GB physical boundary of the RTX 3090.
+When VRAM overflows, PCIe bus thrashing occurs, causing generation speed to collapse to **12 – 24 tok/s**.
+By utilizing the dedicated **A8 PLE N-Gram speculative table** on NVMe mmap instead of MTP, Gyro-Coder stays strictly within 19.9 GB VRAM, sustaining **53.55 tok/s** with 100% syntactic precision.
 
 ---
 
-## Why These Three Models? (Objectives & Modular Roles)
+## Production Launch Command (Cyber-ATX & ATX-Swift)
 
-The pipeline is purpose-built to autonomously design, implement, and audit software without corporate refusals or syntactic degradation.
+Below is the verified command line for operating `Cyber-ATX Q5_K_M` and `ATX-Swift-1.5 Q5_K_M` in high-context production:
 
+```powershell
+$env:GGML_Q8_TURBO3_MMA_FUSED = "1"
+$env:GGML_CUDA_FA_I8QK = "1"
+$env:LLAMAMPERE_ENABLE_SLEEP = "1"
+$env:GGML_CUDA_GRAPH_OPT = "1"
+
+.\build-sm86\bin\Release\llama-server.exe `
+  -m "D:/models/Qwen3.8-27B-Uncensored-Cyber-ATX-i1-Q5_K_M.gguf" `
+  -ngl 99 `
+  -c 163840 `
+  -b 4096 `
+  -ub 1024 `
+  -t 12 `
+  -tb 8 `
+  -fa on `
+  -ctk turbo5 `
+  -ctv turbo4 `
+  --kv-unified `
+  --prio 3 `
+  --parallel 1 `
+  --jinja `
+  --fit off `
+  --cache-prompt `
+  --cache-ram 16384 `
+  --ctx-checkpoints 24 `
+  --checkpoint-min-step 10240 `
+  --spec-draft-vocab-map 65536 `
+  --reasoning-format none `
+  --reasoning-effort medium `
+  --temp 0.6 `
+  --top-p 0.95 `
+  --top-k 40 `
+  --min-p 0.05 `
+  --repeat-penalty 1.0 `
+  --repeat-last-n 256 `
+  --alias "Swift-1.5-Qwen3.8-27B-Uncensored-Q5_K_M" `
+  --host 127.0.0.1 `
+  --port 8080
 ```
-┌────────────────────────────────┬───────────────────────────────┬───────────────────────────────┐
-│ 1. ARCHITECT                   │ 2. CODER                      │ 3. DEBUGGER / AUDITOR         │
-├────────────────────────────────┼───────────────────────────────┼───────────────────────────────┤
-│ ATX-Swift-1.5 Q5_K_M           │ Gyro-Coder TQ2_0              │ Cyber-ATX Q5_K_M              │
-│ (bjivanovich / HF)             │ (AgentionAI / HF)             │ (bjivanovich / HF)            │
-│                                │                               │                               │
-│ • Uncensored / abliterated     │ • 70B MoE (3.8B active)       │ • Cybersecurity fine-tuning   │
-│ • 128k - 196k context scope    │ • Q8/A8 PLE table on NVMe     │ • Imatrix i1 vulnerability map│
-│ • Systemic modular planning    │ • Near-zero syntax errors     │ • Exploit & leak detection    │
-│ • Complex API specifications   │ • 53.55 tok/s code emission   │ • Strict execution & typing   │
-└────────────────────────────────┴───────────────────────────────┴───────────────────────────────┘
-```
 
-### Modular Role Interchangeability
-The pipeline is fully modular; roles can be swapped dynamically based on task requirements:
-1. **High-Speed Coding Route**:
-   * *Architect*: `ATX-Swift-1.5 Q5_K_M`
-   * *Coder*: `Cyber-ATX iQ4_XS` (emits code at **76.90 tok/s**)
-   * *Debugger*: `Cyber-ATX Q5_K_M` (audits security and edge cases)
-2. **Zero-Defect Syntactic Route**:
-   * *Architect*: `ATX-Swift-1.5 Q5_K_M`
-   * *Coder*: `Gyro-Coder TQ2_0` (pristine algorithmic structure via 70B MoE)
-   * *Debugger*: `Cyber-ATX Q5_K_M`
-3. **Autonomous 2-Stage Route**:
-   * *Architect*: `Gyro-Coder TQ2_0`
-   * *Coder/Auditor*: `Cyber-ATX Q5_K_M` (verified directly via live Python interpreter `exit code == 0`).
+Detailed parameter documentation across all models is in:
+📄 **[`docs/LAUNCH_PARAMS.md`](docs/LAUNCH_PARAMS.md)**
 
 ---
 
@@ -143,7 +200,7 @@ This patch targets **llamAmpere-Ultra**, an integrated high-performance runtime 
 
 | Component / Fork | Author | Key Technology Incorporated |
 |---|---|---|
-| **[llamAmpere](https://github.com/JakeATX/llamAmpere)** | JakeATX | Ampere SM 8.6 fused PTX inline assembly (`GGML_Q8_TURBO3_MMA_FUSED`), FlashAttention I8QK, and static CUDA Graph compilation. |
+| **[llamAmpere](https://github.com/JakeATX/llamAmpere)** | JakeATX | Ampere SM 8.6 fused PTX inline assembly (`GGML_Q8_TURBO3_MMA_FUSED`), FlashAttention I8QK, turbo4/turbo5 KV cache, and static CUDA Graph compilation. |
 | **[AgentionAI llama.cpp](https://github.com/AgentionAI/llama.cpp)** | AgentionAI | Native execution engine for `Gyro-Coder` (`TQ2_0` quantization + A8 PLE N-Gram speculative decoding). |
 | **[Strata](https://github.com/strata-llm/strata)** | strata-llm | Tensor virtual-address slicing and layered offloading for models exceeding physical VRAM. |
 | **[llamampere-vmm-swap](https://github.com/bjivanovich2017/llamampere-vmm-swap)** | bjivanovich2017 | CUDA Driver VMM Hot Swapping (<2.3s RAM↔VRAM), WDDM sliding window manager, and background host pre-staging. |
@@ -157,13 +214,6 @@ All models utilized are publicly accessible:
 * **`ATX-Swift-1.5`**: [`bjivanovich/ATX-Swift-1.5-Qwen3.8-27B-Uncensored-MTP-GGUF`](https://huggingface.co/bjivanovich/ATX-Swift-1.5-Qwen3.8-27B-Uncensored-MTP-GGUF)
 * **`Cyber-ATX`**: [`bjivanovich/Qwen3.8-27B-Uncensored-Cyber-ATX-MTP-GGUF`](https://huggingface.co/bjivanovich/Qwen3.8-27B-Uncensored-Cyber-ATX-MTP-GGUF)
 * **`Gyro-Coder`**: [`AgentionAI/Qwen3.8-Flash-Next-Gyro-Coder`](https://huggingface.co/AgentionAI/Qwen3.8-Flash-Next-Gyro-Coder)
-
----
-
-## Execution Parameters & Launch Guide
-
-Detailed breakdowns of all CLI flags, environment variables, Ampere kernel configurations, and engine limits are documented in:
-📄 **[`docs/LAUNCH_PARAMS.md`](docs/LAUNCH_PARAMS.md)**
 
 ---
 
@@ -205,7 +255,7 @@ $env:GGML_CUDA_GRAPH_OPT     = "1"
 $env:GGML_Q8_TURBO3_MMA_FUSED = "1"
 $env:GGML_CUDA_FA_I8QK        = "1"
 
-.\bin\Release\llama-server.exe -m "D:\models\your-model.gguf" -ngl 99 -c 98304 -fa on --load-mode none --sleep-idle-seconds 3
+.\build-sm86\bin\Release\llama-server.exe -m "D:\models\your-model.gguf" -ngl 99 -c 163840 -fa on --load-mode none --sleep-idle-seconds 3
 ```
 
 ---
