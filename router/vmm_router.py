@@ -77,7 +77,7 @@ class VMMStateManager:
 
             t0 = time.perf_counter()
             prev_model = self.active_vram_model
-            logger.info(f"🔄 VMM SWAP TRIGGERED: '{prev_model}' -> '{target_model}'")
+            logger.info(f">> [VMM SWAP TRIGGERED]: '{prev_model}' -> '{target_model}'")
 
             # In llamampere-vmm-swap, when the previous model goes idle, cuMemUnmap
             # unbinds VRAM in <60ms. When a request hits the target model's port,
@@ -92,7 +92,7 @@ class VMMStateManager:
                 "timestamp": time.time(),
                 "latency_s": round(swap_time, 4)
             })
-            logger.info(f"⚡ VMM SWAP READY in {swap_time:.3f}s. Active VRAM model: {target_model}")
+            logger.info(f">> [VMM SWAP READY] in {swap_time:.3f}s. Active VRAM model: {target_model}")
             return swap_time
 
 state = VMMStateManager()

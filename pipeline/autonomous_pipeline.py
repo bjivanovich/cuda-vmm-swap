@@ -84,7 +84,7 @@ def main():
     # STAGE 2: CODER (Gyro-Coder TQ2_0)
     # -------------------------------------------------------------
     print("\n[STAGE 2/3] Transitioning to CODER (Gyro-Coder TQ2_0)...")
-    print(">> Triggering VMM Hot-Swap (RAM -> VRAM DMA across PCIe Gen4)...")
+    print(">> Triggering VMM Hot-Swap (RAM -> VRAM DMA across PCIe 3.0 x16)...")
     sys_coder = "You are an expert software engineer. Implement the complete, production-ready Python solution based strictly on the architectural blueprint. Include runnable unit tests with unittest. Output pure Python code in a single executable block."
     prompt_coder = f"Architectural Blueprint:\n\n{plan}\n\nTask: Implement the complete source code and unit tests."
 
@@ -121,7 +121,7 @@ def main():
     # STAGE 3: DEBUGGER & AUDITOR (Cyber-ATX Q5_K_M)
     # -------------------------------------------------------------
     print("\n[STAGE 3/3] Transitioning to DEBUGGER / AUDITOR (Cyber-ATX Q5_K_M)...")
-    print(">> Triggering VMM Hot-Swap (RAM -> VRAM DMA across PCIe Gen4)...")
+    print(">> Triggering VMM Hot-Swap (RAM -> VRAM DMA across PCIe 3.0 x16)...")
     sys_debug = "You are a cybersecurity auditor and senior systems debugger. Review the provided implementation and runtime output. Identify race conditions, security vulnerabilities, or bugs. Provide the final hardened, production-grade code."
     prompt_debug = f"Original Code:\n```python\n{extracted_code}\n```\n\nRuntime Execution Result:\nExit Code: {exit_code}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}\n\nAudit, fix, and provide hardened code."
 

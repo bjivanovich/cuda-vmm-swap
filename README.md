@@ -195,7 +195,7 @@ $env:GGML_CUDA_GRAPH_OPT = "1"
 ```
 
 Detailed parameter documentation across all models is in:
-📄 **[`docs/LAUNCH_PARAMS.md`](docs/LAUNCH_PARAMS.md)**
+* **[`docs/LAUNCH_PARAMS.md`](docs/LAUNCH_PARAMS.md)**
 
 ---
 
