@@ -59,6 +59,12 @@ JakeATX's `llamAmpere` engine implements high-compression KV cache kernels:
 ### Speculative Decoding & Multi-Token Prediction (MTP)
 * **`--spec-draft-vocab-map 65536` (or `auto`)**
   * *Purpose*: Maps the vocabulary dynamically to the high-precision Q8_0 MTP draft head. Guarantees 85% to 95.5% speculative token acceptance in structured code.
+* **`--spec-draft-n-min-adaptive 3`**
+  * *Purpose*: (JakeATX / llamAmpere) Sets the minimum adaptive speculation window to 3 tokens per forward pass. Prevents the drafter from under-speculating during continuous sequences of code tokens.
+* **`--spec-draft-n-max 5`**
+  * *Purpose*: (JakeATX / llamAmpere) Caps the maximum speculative draft depth to 5 tokens. Optimizes the balance between draft computation and base-model verification passes, preventing rollback penalties if draft prediction diverges.
+* **`--spec-draft-p-min 0`**
+  * *Purpose*: (JakeATX / llamAmpere) Disables early probability cutoffs during draft exploration, permitting full candidate speculation depth.
 * **`--reasoning-format none --reasoning-effort medium`**
   * *Purpose*: Suppresses verbose natural language reasoning markers in Qwen 3.8 models, channeling compute directly into code generation.
 
@@ -103,6 +109,9 @@ $env:GGML_CUDA_GRAPH_OPT = "1"
   --ctx-checkpoints 24 `
   --checkpoint-min-step 10240 `
   --spec-draft-vocab-map 65536 `
+  --spec-draft-n-min-adaptive 3 `
+  --spec-draft-n-max 5 `
+  --spec-draft-p-min 0 `
   --reasoning-format none `
   --reasoning-effort medium `
   --temp 0.6 `
@@ -189,6 +198,9 @@ $env:GGML_CUDA_GRAPH_OPT = "1"
   --ctx-checkpoints 24 `
   --checkpoint-min-step 10240 `
   --spec-draft-vocab-map 65536 `
+  --spec-draft-n-min-adaptive 3 `
+  --spec-draft-n-max 5 `
+  --spec-draft-p-min 0 `
   --reasoning-format none `
   --reasoning-effort medium `
   --temp 0.2 `

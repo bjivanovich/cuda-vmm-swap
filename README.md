@@ -176,6 +176,9 @@ $env:GGML_CUDA_GRAPH_OPT = "1"
   --ctx-checkpoints 24 `
   --checkpoint-min-step 10240 `
   --spec-draft-vocab-map 65536 `
+  --spec-draft-n-min-adaptive 3 `
+  --spec-draft-n-max 5 `
+  --spec-draft-p-min 0 `
   --reasoning-format none `
   --reasoning-effort medium `
   --temp 0.6 `
