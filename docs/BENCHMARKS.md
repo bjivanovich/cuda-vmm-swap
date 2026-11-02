@@ -1,21 +1,23 @@
 # Benchmark Results
 
-Hardware: RTX 3090 24GB | 48GB DDR4 | PCIe Gen4 x16 | Windows 11 WDDM | CUDA 12.x
+Hardware: NVIDIA GeForce RTX 3090 24GB | 48GB DDR4 | PCIe 3.0 x16 (~8.5 GB/s effective DMA) | Windows 11 WDDM | CUDA 12.x
 
 ## VMM Sleep/Wake Cycle (Full Model Size)
+
+*Note: Transition time reflects the full hardware + driver cycle: host pinned memory allocation/staging, virtual address mapping (`cuMemMap`), PCIe DMA transfer, and CUDA stream synchronization.*
 
 | Operation | Model Size | Time | Notes |
 |---|---|---|---|
 | Sleep (cuMemUnmap) | 14.3 GB | < 60 ms | Physical VRAM fully released |
 | Sleep (cuMemUnmap) | 18.8 GB | < 60 ms | Physical VRAM fully released |
-| Wake (cuMemMap + DMA) | 14.3 GB | **1.718 s** | PCIe Gen4 x16, pinned RAM source |
-| Wake (cuMemMap + DMA) | 18.8 GB | **2.21 s** | PCIe Gen4 x16, pinned RAM source |
+| Wake (cuMemMap + DMA) | 14.3 GB | **1.718 s** | PCIe 3.0 x16, pinned RAM source |
+| Wake (cuMemMap + DMA) | 18.8 GB | **2.21 s** | PCIe 3.0 x16, pinned RAM source |
 
 ## Raw PCIe Transfer Rates
 
-| Test | Transfer | Time | Bandwidth |
+| Test | Transfer | Time | Effective Bandwidth |
 |---|---|---|---|
-| test_vmm_15gb_driver | 15 GB HtoD (pinned) | ~1.76 s | **~8.5 GB/s** |
+| test_vmm_15gb_driver | 15 GB HtoD (pinned) | ~1.76 s | **~8.5 GB/s** (~68% PCIe 3.0 x16 effective) |
 | test_vmm_swap | 15 GB HtoD (VirtualAlloc) | ~1.95 s | ~7.7 GB/s |
 | test_pipeline | 15 GB double-buffered staging | ~2.1 s | ~7.1 GB/s |
 | test_chunked_pinned | 15 GB chunked cudaHostAlloc | ~1.81 s | ~8.3 GB/s |
