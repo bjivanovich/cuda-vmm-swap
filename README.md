@@ -341,3 +341,16 @@ Binaries verified:
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+
+---
+
+## Credits & Acknowledgements
+
+This standalone architecture builds upon the groundbreaking work of the open-source AI and CUDA systems community:
+
+- **[JakeATX / llamAmpere](https://github.com/JakeATX/llamAmpere)**: Foundation of the SM86 Ampere execution engine, custom fused MMA kernels (Q8/Q4), FlashAttention I8QK integration, and SJ-KVaRN / turbo4-5 compressed KV cache architectures enabling 96k - 200k+ context windows.
+- **[AgentionAI](https://huggingface.co/agentionai)**: Creators of Gyro-Coder TQ2_0 (MoE 70B with 3.8B active) and the A8 PLE N-Gram speculative table methodology, delivering near-zero syntax error code synthesis.
+- **[Niko1221 / Strata](https://github.com/Niko1221/Strata)**: Conceptual and architectural pioneer in local LLM offloading, memory tiering, and domain expert cache optimization for consumer hardware.
+- **u/enndeeee**: Original author of the CUDA Driver VMM SleepableBuffer concept in [Infernix PR #43](https://github.com/infernix/llama.cpp/pull/43), which inspired our Windows WDDM sliding-window VMM model swapper.
+- **[ggml-org / llama.cpp](https://github.com/ggml-org/llama.cpp)**: The underlying LLM inference framework.
