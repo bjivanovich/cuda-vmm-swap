@@ -1,14 +1,16 @@
-# llamampere-vmm-swap
+# cuda-vmm-swap
 
 **Fast LLM model swapping between RAM and VRAM in under 2.3 seconds using CUDA Virtual Memory Management (VMM).**
 
-Patch, architecture, and benchmarks for a custom `llama.cpp` fork (**llamAmpere-Ultra**) — verified on a single **NVIDIA GeForce RTX 3090 (24 GB VRAM)** running a sequential 3-agent pipeline: **Architect → Coder → Debugger/Auditor**, supporting models from 14.3 GB to 19.9 GB VRAM active footprint with context windows up to **160k - 256k tokens**.
+Engine-agnostic patch, architecture, and benchmarks for running multi-agent LLM pipelines on a single GPU — verified on a single **NVIDIA GeForce RTX 3090 (24 GB VRAM)** running a sequential 3-agent pipeline: **Architect -> Coder -> Debugger/Auditor**, supporting models from 14.3 GB to 19.9 GB VRAM active footprint with context windows up to **96k - 200k+ tokens**.
+
+Compatible with upstream `llama.cpp`, `llamAmpere-Ultra`, `Strata`, and custom CUDA inference runtimes.
 
 > **Credit & Acknowledgement:** The core low-level VMM `sleep` / `wake` concept was pioneered by Reddit user
 > **u/enndeeee** in [Infernix PR #43](https://github.com/infernix/llama.cpp/pull/43) (`SleepableBuffer`).
-> This repository adapts and expands that approach for Windows 11 / WDDM driver limitations, multi-model agent switching, background pre-staging, and the `llamAmpere-Ultra` execution engine.
+> This repository adapts and expands that approach into an engine-agnostic infrastructure for Windows 11 / WDDM driver limitations, multi-model agent switching, background pre-staging, an OpenAI-compatible router, and an MCP server.
 >
-> **Full Engine Repository:** Looking for the complete `llama.cpp` fork with Ampere tensor-core kernels (SM86) and native Gyro-Coder TQ2_0 support built-in? See **[llamAmpere-Ultra](https://github.com/bjivanovich2017/llamAmpere-Ultra)**. This repository serves as the standalone patch, benchmark suite, router, and integration layer.
+> **Full Engine Repository:** Looking for our turnkey `llama.cpp` fork with Ampere tensor-core kernels (SM86), native Gyro-Coder TQ2_0 support, and built-in VMM swapping? See **[llamAmpere-Ultra](https://github.com/bjivanovich/llamAmpere-Ultra)**. This repository serves as the standalone patch, benchmark suite, router, and integration layer.
 
 ---
 
