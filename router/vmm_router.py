@@ -106,6 +106,15 @@ class VMMStateManager:
 
     def start_backend(self, role_key: str) -> bool:
         """Spawns backend process and waits until /health responds 200 OK."""
+        model_info = MODELS.get(role_key)
+        if not model_info:
+            logger.error(f"No configuration for model '{role_key}'")
+            return False
+
+        port = model_info.get("backend_port", 8081)
+        health_url = f"http://127.0.0.1:{port}/health"
+
+        # Check if already running or responding on port
         if role_key in self.running_processes:
             proc = self.running_processes[role_key]
             if proc.poll() is None:
@@ -113,10 +122,14 @@ class VMMStateManager:
             else:
                 del self.running_processes[role_key]
 
-        model_info = MODELS.get(role_key)
-        if not model_info:
-            logger.error(f"No configuration for model '{role_key}'")
-            return False
+        try:
+            with httpx.Client(timeout=1.0) as client:
+                r = client.get(health_url)
+                if r.status_code == 200:
+                    logger.info(f"[VMM POOL READY] {role_key.upper()} already operational on port {port}. (VRAM: {get_gpu_vram_used_mb()} MB)")
+                    return True
+        except Exception:
+            pass
 
         model_path = model_info.get("model_path", "")
         port = model_info.get("backend_port", 8081)
@@ -363,7 +376,7 @@ async def chat_completions(request: Request):
     target_url = f"http://127.0.0.1:{backend_port}/v1/chat/completions"
     is_streaming = body.get("stream", False)
 
-    client = httpx.AsyncClient(timeout=300.0)
+    client = httpx.AsyncClient(timeout=3600.0)
 
     try:
         if not is_streaming:

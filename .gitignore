@@ -22,3 +22,7 @@ __pycache__/
 # Windows
 Thumbs.db
 desktop.ini
+
+# Logs and outputs
+*.log
+pipeline_output/
