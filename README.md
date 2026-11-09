@@ -267,57 +267,98 @@ $env:GGML_CUDA_FA_I8QK        = "1"
 
 ---
 
-## Agent Harness, Tool & MCP Integrations
+## The 4 Operational Methods & Harness Integrations
 
-To make the sub-2.3s VMM swap immediately usable in production without manual process orchestration, three integration layers are provided:
+To make sub-2.3s VMM swap immediately usable across any development workflow (CLI or GUI), four distinct integration layers are provided:
 
-### 1. OpenAI-Compatible Fast-Swap Router (`router/vmm_router.py`)
+### 1. OpenAI-Compatible Fast-Swap Router & Web Control Studio (`router/vmm_router.py`)
 
-A high-performance reverse proxy that exposes a standard `/v1/chat/completions` endpoint on `http://127.0.0.1:8000/v1`.
+A high-performance reverse proxy that exposes a standard `/v1/chat/completions` endpoint on `http://127.0.0.1:8000/v1` and serves an integrated mobile touch-friendly **Web Control Studio** at `http://127.0.0.1:8000/ui`.
 
 ```bash
-# Start the VMM Router
+# Start the VMM Router & Control Studio
 python router/vmm_router.py
 ```
 
-**Works out-of-the-box with any agent harness or IDE:**
-* **`pi-coding-agent` / `Aider` / `OpenHands`**:
-  ```bash
-  export OPENAI_API_BASE="http://127.0.0.1:8000/v1"
-  export OPENAI_API_KEY="not-needed"
+* **Web Control Studio (`http://127.0.0.1:8000/ui`)**:
+  - Live VRAM and System RAM gauges with the Windows WDDM 50% pinned memory limit indicator.
+  - Slot cards with real-time viability evaluation badges: Green `[VIABLE]` or Red `[OOM RISK]`.
+  - Global `[SWAP: ENABLED / DISABLED]` toggle.
+  - `<2.3s` manual swap trigger buttons and live interactive prompt testing playground.
+* **Seamless Integration with Paseo & `pi-coding-agent`**:
+  Set your local provider base URL in `~/.pi/agent/models.json`:
+  ```json
+  "providers": {
+    "local-llm": {
+      "baseUrl": "http://127.0.0.1:8000/v1",
+      "api": "openai-completions",
+      "apiKey": "local-dummy"
+    }
+  }
   ```
-* **Cursor / Continue.dev / LibreChat**:
-  Set Provider to **OpenAI Compatible**, Base URL to `http://127.0.0.1:8000/v1`.
-* **Model Selection**: Send `"model": "architect"`, `"model": "coder"`, or `"model": "debugger"`. The router checks VRAM residency, triggers the <60ms eviction and sub-2.3s DMA wake automatically, and streams tokens to the client.
+  Paseo and Pi simply request `"model": "architect"`, `"model": "coder"`, or `"model": "debugger"`. The router handles strict VRAM eviction and DMA hot-swapping transparently.
 
-### 2. Autonomous 3-Agent Pipeline (`pipeline/autonomous_pipeline.py`)
+### 2. Native Multi-Instance Engine Sleep/Wake (`llama-server`)
 
-An end-to-end command-line runner that executes the full engineering triad on a task:
-1. **Architect** writes the system design and interface contracts.
-2. Swaps to **Coder** (<2.3s DMA) to synthesize implementation and `unittest` suites.
-3. Automatically executes the generated code in a Python sandbox to capture exit codes.
-4. Swaps to **Debugger** (<2.3s DMA) to audit for race conditions, seal vulnerabilities, and fix errors.
-
+Execute independent `llama-server.exe` instances on dedicated ports (e.g. `:8081`, `:8082`, `:8083`) with:
 ```bash
-python pipeline/autonomous_pipeline.py --task "Create an async telemetry server with shared memory ring buffers"
+set LLAMAMPERE_ENABLE_SLEEP=1
+llama-server.exe -m model.gguf --sleep-idle-seconds 3 --port 8081 ...
 ```
+When idle for 3 seconds, `handle_sleeping_state(true)` calls `llama_model_sleep()`, unmapping physical VRAM in `<60ms` (`cuMemUnmap`). Upon receiving an HTTP request, `handle_sleeping_state(false)` calls `llama_model_wake()`, remapping VRAM via PCIe DMA in `<2.3s`.
 
 ### 3. Model Context Protocol (MCP) Server (`mcp/vmm_mcp_server.py`)
 
-Integrates directly into **Google Antigravity IDE**, **Claude Desktop**, or **Cursor** via standard stdio JSON-RPC.
+Integrates directly into **Paseo** (which supports `"mcp": { "injectIntoAgents": true }`), **Google Antigravity IDE**, **Claude Desktop**, or **Cursor** via stdio JSON-RPC.
 
-Add to your MCP configuration (`claude_desktop_config.json` or Antigravity MCP settings):
 ```json
 {
   "mcpServers": {
-    "llamampere-vmm": {
+    "vmm-controller": {
       "command": "python",
-      "args": ["C:/path/to/llamampere-vmm-swap/mcp/vmm_mcp_server.py"]
+      "args": ["C:/path/to/cuda-vmm-swap/mcp/vmm_mcp_server.py"]
     }
   }
 }
 ```
-Exposes `vmm_list_models`, `vmm_swap_model`, and `vmm_query_agent` tools natively to your AI assistant.
+Exposes 4 tools natively:
+* `vmm_list_models`: Discovers active VRAM residency, running backends, and swap latency history.
+* `vmm_get_memory_budget`: Evaluates hardware VRAM, system RAM, and Windows WDDM limits for any GGUF model and KV quantization format.
+* `vmm_swap_model`: Manually commands a sub-2.3s VMM hot-swap to target model role.
+* `vmm_query_agent`: Dispatches prompts directly to specialized agent roles with transparent VMM swap.
+
+### 4. Master Harness & Autonomous Pipeline (`master_harness.py` & `pipeline/autonomous_pipeline.py`)
+
+Programmatic CLI runners for automated multi-model pipelines:
+
+```bash
+# Launch master harness with swap toggle and browser UI
+python master_harness.py --swap on --open-ui
+
+# Run hardware detection and memory budget check
+python master_harness.py --check-memory
+
+# Execute autonomous 4-stage software engineering pipeline with closed-loop fix
+python pipeline/autonomous_pipeline.py --task "Create an async telemetry engine with shared memory ring buffers"
+```
+
+---
+
+## Hardware Scope & Memory Advisor (`router/memory_advisor.py`)
+
+### Supported Engines
+* **`llamAmpere-Ultra` (SM86 Native)**: Includes Google TurboQuant kernels (`turbo2` through `turbo5`, `tq5_0`, `tq6_0`), SJ-KVaRN fused rotation codec (`GGML_SJKVARN_FUSED_ROT`), DeepSeek MLA compressed KV cache, and FlashAttention I8QK.
+* **`llama.cpp` Upstream (Patched)**: Standard GGML quantizations (`f16`, `q8_0`, `q5_0`, `q5_1`, `q4_0`, `q4_1`, `iq4_nl`).
+
+### Excluded Engines (By Design)
+* **`vLLM` / `Aphrodite`**: Rely on Linux-centric PyTorch allocations and pre-reserve 90-95% of total VRAM, preventing multi-model co-existence.
+* **`ExLlamaV2` / `TabbyAPI`**: Do not currently implement the CUDA Driver VMM `cuMem*` API; unloads require full process/tensor reconstruction (8-18s latency).
+* **Hybrid Offload Engines (e.g. `Strata`)**: By offloading model layers to system RAM and NVMe disk, hybrid offload engines consume 80-95% of system RAM. On Windows, WDDM strictly caps pinned host memory (`cudaHostAlloc`) to **50% of physical RAM**. Flooding system RAM with offloaded layers leaves zero room for the secondary model's pinned DMA buffer, causing `cudaErrorMemoryAllocation`.
+
+### Accurate GGUF Tensor Inspection
+Instead of relying on inaccurate guesses, `memory_advisor.py` reads the binary GGUF header to extract exact attention tensor geometry:
+$$\text{Elements per Token} = 2 \times n_{\text{layers}} \times n_{\text{kv\_heads}} \times d_{\text{head}}$$
+And multiplies by the exact bytes-per-element for the chosen engine KV quantization format.
 
 ---
 

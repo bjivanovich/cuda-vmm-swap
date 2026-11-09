@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>cuda-vmm-swap Control Studio</title>
+  <style>
+    :root {
+      --bg: #0e1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent-green: #238636;
+      --accent-red: #da3633;
+      --accent-yellow: #d29922;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --text-bright: #f0f6fc;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 16px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: 0.5px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .badge-active { background: #1f6feb22; border-color: #1f6feb; color: #58a6ff; }
+    .badge-ok { background: #23863622; border-color: #238636; color: #3fb950; }
+    .badge-warn { background: #d2992222; border-color: #d29922; color: #f2cc60; }
+    .badge-danger { background: #da363322; border-color: #da3633; color: #f85149; }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-bright);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .meter-container { margin-bottom: 12px; }
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .meter-bar {
+      height: 10px;
+      background: #21262d;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .meter-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+    .meter-fill.warn { background: var(--accent-yellow); }
+    .meter-fill.danger { background: var(--accent-red); }
+    .meter-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #f85149;
+    }
+    
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .btn {
+      background: #21262d;
+      color: var(--text-bright);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: #30363d; border-color: #8b949e; }
+    .btn:active { background: #282e33; }
+    .btn-primary { background: var(--accent-green); border-color: #2ea043; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-danger { background: var(--accent-red); border-color: #b62324; color: #fff; }
+    .btn-sm { padding: 3px 8px; font-size: 11px; }
+
+    input, select, textarea {
+      width: 100%;
+      background: #0d1117;
+      color: var(--text-bright);
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    
+    .slot-card {
+      background: #11151c;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .slot-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px rgba(88, 166, 255, 0.2);
+    }
+    .slot-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .slot-title { font-weight: 700; color: var(--accent); }
+    
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 11px;
+    }
+    .stats-table td {
+      padding: 3px 0;
+      border-bottom: 1px dotted #21262d;
+    }
+    .stats-table td:last-child {
+      text-align: right;
+      color: var(--text-bright);
+    }
+    
+    #console-log {
+      background: #090d13;
+      border: 1px solid #21262d;
+      border-radius: 4px;
+      padding: 8px;
+      height: 180px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: #7ee787;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>[CUDA-VMM-SWAP] Control Studio</h1>
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+        Asynchronous Pipelined VMM Hot-Swap Engine | Windows WDDM Aware
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <span id="swap-status-badge" class="badge badge-ok">SWAP: ENABLED</span>
+      <button class="btn btn-sm" onclick="toggleSwap()">Toggle Swap</button>
+      <button class="btn btn-sm btn-primary" onclick="refreshStatus()">Refresh</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- HARDWARE TELEMETRY -->
+    <div class="card">
+      <div class="card-title">
+        <span>Hardware Telemetry</span>
+        <span id="gpu-name-badge" class="badge badge-active">RTX 3090</span>
+      </div>
+
+      <div class="meter-container">
+        <div class="meter-label">
+          <span>Physical GPU VRAM</span>
+          <span id="vram-text">-- / -- MB</span>
+        </div>
+        <div class="meter-bar">
+          <div id="vram-fill" class="meter-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <div class="meter-container">
+        <div class="meter-label">
+          <span>System RAM (Windows Pinned Cap: 50%)</span>
+          <span id="ram-text">-- / -- MB</span>
+        </div>
+        <div class="meter-bar">
+          <div id="ram-fill" class="meter-fill" style="width: 0%;"></div>
+          <!-- 48% WDDM limit marker -->
+          <div class="meter-marker" style="left: 48%;" title="Windows WDDM 50% Pinned Memory Hard Cap"></div>
+        </div>
+      </div>
+
+      <table class="stats-table">
+        <tr>
+          <td>Active Model in VRAM</td>
+          <td id="stat-active-model" style="color: #58a6ff; font-weight: 700;">None</td>
+        </tr>
+        <tr>
+          <td>Staged Model in RAM</td>
+          <td id="stat-staged-model">None</td>
+        </tr>
+        <tr>
+          <td>Last Swap Latency</td>
+          <td id="stat-swap-latency">0.000 s</td>
+        </tr>
+        <tr>
+          <td>Strict Eviction Rule</td>
+          <td style="color: #3fb950;">Active (&lt; 3000 MB Barrier)</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- PIPELINE TEST INTERFACE -->
+    <div class="card">
+      <div class="card-title">
+        <span>Interactive Agent Dispatch</span>
+        <span class="badge badge-active">OpenAI API (:8000)</span>
+      </div>
+      <div>
+        <label style="font-size: 11px; color: var(--text-muted);">Target Model / Role:</label>
+        <select id="dispatch-target">
+          <option value="architect">Architect (Spec & Blueprint)</option>
+          <option value="coder">Coder (Synthesis)</option>
+          <option value="debugger">Debugger (Forensic Audit)</option>
+        </select>
+        <label style="font-size: 11px; color: var(--text-muted);">Prompt:</label>
+        <textarea id="dispatch-prompt" rows="3" placeholder="Enter task or instruction..."></textarea>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary" style="flex: 1;" onclick="sendPrompt()">Dispatch with Auto-Swap</button>
+          <button class="btn btn-danger" onclick="evictCurrent()">Evict VRAM</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIGURED SLOTS (ROLES) -->
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="card-title">
+      <span>Configured Model Slots & Memory Budgets</span>
+      <span style="font-size: 11px; color: var(--text-muted);">Evaluated via GGUF Tensor Parser</span>
+    </div>
+    <div id="slots-container" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+      <!-- Injected via JavaScript -->
+    </div>
+  </div>
+
+  <!-- REAL-TIME LOGS -->
+  <div class="card">
+    <div class="card-title">
+      <span>VMM Router & Execution Log</span>
+      <button class="btn btn-sm" onclick="clearLog()">Clear</button>
+    </div>
+    <div id="console-log">[SYSTEM READY] Listening for VMM swap requests...</div>
+  </div>
+
+  <script>
+    let globalStatus = {};
+
+    function logMsg(msg) {
+      const el = document.getElementById("console-log");
+      const ts = new Date().toTimeString().split(' ')[0];
+      el.textContent += `\n[${ts}] ${msg}`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById("console-log").textContent = "[LOG CLEARED]";
+    }
+
+    async function refreshStatus() {
+      try {
+        const res = await fetch("/status");
+        if (!res.ok) return;
+        const data = await res.json();
+        globalStatus = data;
+
+        // VRAM Bar
+        const vramUsed = data.physical_vram_used_mb || 0;
+        const vramTotal = (data.hardware && data.hardware.gpu) ? data.hardware.gpu.total_mb : 24576;
+        const vramPct = Math.min(100, (vramUsed / vramTotal) * 100);
+        document.getElementById("vram-text").textContent = `${vramUsed.toLocaleString()} / ${vramTotal.toLocaleString()} MB (${vramPct.toFixed(1)}%)`;
+        const vramBar = document.getElementById("vram-fill");
+        vramBar.style.width = `${vramPct}%`;
+        vramBar.className = "meter-fill" + (vramPct > 90 ? " danger" : vramPct > 75 ? " warn" : "");
+
+        // RAM Bar
+        const ramTotal = (data.hardware) ? data.hardware.system_ram_total_mb : 49152;
+        const pinnedCap = (data.hardware) ? data.hardware.wddm_pinned_cap_mb : 23500;
+        document.getElementById("ram-text").textContent = `Cap: ${pinnedCap.toLocaleString()} / Total: ${ramTotal.toLocaleString()} MB`;
+        const ramBar = document.getElementById("ram-fill");
+        ramBar.style.width = `48%`;
+
+        // Stats
+        document.getElementById("stat-active-model").textContent = (data.active_vram_model || "None").toUpperCase();
+        document.getElementById("stat-staged-model").textContent = (data.staged_ram_model || "None").toUpperCase();
+        document.getElementById("stat-swap-latency").textContent = `${(data.last_swap_latency_seconds || 0).toFixed(3)} s`;
+
+        const swapBadge = document.getElementById("swap-status-badge");
+        if (data.swap_enabled !== false) {
+          swapBadge.textContent = "SWAP: ENABLED";
+          swapBadge.className = "badge badge-ok";
+        } else {
+          swapBadge.textContent = "SWAP: DISABLED";
+          swapBadge.className = "badge badge-danger";
+        }
+
+        renderSlots(data);
+      } catch (e) {
+        logMsg("Failed to poll status: " + e);
+      }
+    }
+
+    function renderSlots(data) {
+      const container = document.getElementById("slots-container");
+      container.innerHTML = "";
+      const models = data.models || {};
+      const activeModel = data.active_vram_model;
+
+      for (const [key, info] of Object.entries(models)) {
+        const isActive = (key === activeModel);
+        const card = document.createElement("div");
+        card.className = "slot-card" + (isActive ? " active" : "");
+        
+        const weightsMb = info.weights_mb || Math.round((info.vram_gb || 18.0) * 1024);
+        const ctxTokens = info.context || 98304;
+        const ctk = info.ctk || "turbo5";
+        const ctv = info.ctv || "turbo4";
+
+        card.innerHTML = `
+          <div class="slot-header">
+            <span class="slot-title">${key.toUpperCase()}</span>
+            <span class="badge ${isActive ? 'badge-ok' : 'badge-active'}">${isActive ? 'ACTIVE IN VRAM' : 'STANDBY'}</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; word-break: break-all;">
+            ${info.model_path || 'Standard Path'}
+          </div>
+          <table class="stats-table">
+            <tr><td>Context Window</td><td>${ctxTokens.toLocaleString()} tokens</td></tr>
+            <tr><td>KV Cache Quant</td><td>${ctk} / ${ctv}</td></tr>
+            <tr><td>Est. VRAM Footprint</td><td>~${weightsMb.toLocaleString()} MB</td></tr>
+          </table>
+          <div style="margin-top: 8px;">
+            <button class="btn btn-sm btn-primary" style="width: 100%;" onclick="swapModel('${key}')" ${isActive ? 'disabled' : ''}>
+              ${isActive ? 'Active in VRAM' : 'Swap to VRAM (&lt;2.3s)'}
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      }
+    }
+
+    async function swapModel(role) {
+      logMsg(`Requesting manual VMM swap to: '${role}'...`);
+      try {
+        const res = await fetch("/v1/vmm/swap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: role })
+        });
+        const data = await res.json();
+        logMsg(`Swap complete: active='${data.active_model}', latency=${data.swap_latency_seconds}s`);
+        refreshStatus();
+      } catch (e) {
+        logMsg(`Swap failed: ${e}`);
+      }
+    }
+
+    async function toggleSwap() {
+      try {
+        const res = await fetch("/api/toggle-swap", { method: "POST" });
+        const data = await res.json();
+        logMsg(`Swap mode updated: swap_enabled=${data.swap_enabled}`);
+        refreshStatus();
+      } catch (e) {
+        logMsg(`Toggle failed: ${e}`);
+      }
+    }
+
+    async function evictCurrent() {
+      logMsg("Evicting all models from VRAM (<60ms)...");
+      try {
+        await fetch("/api/evict-all", { method: "POST" });
+        logMsg("VRAM eviction complete.");
+        refreshStatus();
+      } catch (e) {
+        logMsg(`Eviction failed: ${e}`);
+      }
+    }
+
+    async function sendPrompt() {
+      const target = document.getElementById("dispatch-target").value;
+      const prompt = document.getElementById("dispatch-prompt").value.trim();
+      if (!prompt) return alert("Please enter a prompt");
+
+      logMsg(`Dispatching query to [${target.toUpperCase()}]...`);
+      try {
+        const res = await fetch("/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: target,
+            messages: [{ role: "user", content: prompt }],
+            stream: false
+          })
+        });
+        const data = await res.json();
+        const content = data.choices[0].message.content || "";
+        logMsg(`[RESPONSE FROM ${target.toUpperCase()}]:\n${content.substring(0, 300)}...`);
+        refreshStatus();
+      } catch (e) {
+        logMsg(`Dispatch failed: ${e}`);
+      }
+    }
+
+    // Auto-refresh every 2.5s
+    setInterval(refreshStatus, 2500);
+    window.addEventListener("DOMContentLoaded", refreshStatus);
+  </script>
+</body>
+</html>

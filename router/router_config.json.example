@@ -1,0 +1,101 @@
+{
+  "router_host": "127.0.0.1",
+  "router_port": 8000,
+  "swap_enabled": true,
+  "engine_type": "llamampere",
+  "engine_executable": "%LLAMA_SERVER_EXE%",
+  "engine_working_dir": ".",
+  "vmm_sleep_idle_seconds": 3,
+  "max_resident_models": 2,
+  "next_role_chain": {
+    "architect": "coder",
+    "coder": "debugger",
+    "debugger": "coder"
+  },
+  "models": {
+    "architect": {
+      "alias": "Architect-Model",
+      "model_path": "%MODELS_DIR%/architect-model.gguf",
+      "backend_port": 8081,
+      "role": "Architect (System Design & Modular Blueprint)",
+      "context": 98304,
+      "ctk": "turbo5",
+      "ctv": "turbo4",
+      "args": [
+        "-ngl", "99",
+        "-c", "98304",
+        "-b", "4096",
+        "-ub", "1024",
+        "-t", "12",
+        "-tb", "8",
+        "-fa", "on",
+        "-ctk", "turbo5",
+        "-ctv", "turbo4",
+        "--kv-unified",
+        "--prio", "3",
+        "--parallel", "1",
+        "--fit", "off",
+        "--cache-prompt",
+        "--temp", "1.0",
+        "--top-p", "0.95"
+      ]
+    },
+    "coder": {
+      "alias": "Coder-Model",
+      "model_path": "%MODELS_DIR%/coder-model.gguf",
+      "backend_port": 8082,
+      "role": "Coder & Error Corrector (Synthesis & Unit Tests)",
+      "context": 98304,
+      "ctk": "q8_0",
+      "ctv": "q8_0",
+      "args": [
+        "-ngl", "999",
+        "-c", "98304",
+        "-b", "2048",
+        "-ub", "512",
+        "-t", "8",
+        "-tb", "8",
+        "-fa", "on",
+        "-ctk", "q8_0",
+        "-ctv", "q8_0",
+        "--parallel", "1",
+        "--prio", "3",
+        "--temp", "0.6",
+        "--top-p", "0.95"
+      ]
+    },
+    "debugger": {
+      "alias": "Debugger-Model",
+      "model_path": "%MODELS_DIR%/debugger-model.gguf",
+      "backend_port": 8083,
+      "role": "Debugger & Forensic Auditor (Defect Isolation & Patching)",
+      "context": 98304,
+      "ctk": "turbo5",
+      "ctv": "turbo4",
+      "args": [
+        "-ngl", "99",
+        "-c", "98304",
+        "-b", "4096",
+        "-ub", "1024",
+        "-t", "12",
+        "-tb", "8",
+        "-fa", "on",
+        "-ctk", "turbo5",
+        "-ctv", "turbo4",
+        "--kv-unified",
+        "--prio", "3",
+        "--parallel", "1",
+        "--fit", "off",
+        "--cache-prompt",
+        "--temp", "1.0",
+        "--top-p", "0.95"
+      ]
+    }
+  },
+  "aliases": {
+    "architect": "architect",
+    "coder": "coder",
+    "debugger": "debugger",
+    "auditor": "debugger"
+  }
+}

@@ -1,17 +1,20 @@
 """
 llamampere-vmm-swap: Asynchronous Pipelined Router & VMM Hot-Swap Engine
 ========================================================================
-Implements the verified 3-model pipelined execution lifecycle with STRICT VRAM EVICTION:
+Implements engine-agnostic VMM fast model swapping with STRICT VRAM EVICTION
+and Windows WDDM Pinned RAM awareness.
 
-1. Startup: Boots ARCHITECT (ATX-Swift-1.5 Q5_K_M 27B) cleanly into VRAM.
-2. Strict Eviction Rule: Under NO circumstance can a swap/wake occur while another
-   model occupies VRAM. The current model in VRAM MUST be 100% expelled, and physical
-   VRAM freed (< 3000 MB), before swapping in the next model.
-3. Coder Phase: Gyro-Coder TQ2_0 (125B MoE / 3.8B active) loads its 19.9 GB expert layer
-   into fresh VRAM, running at sustained >54 tok/s.
-4. Debugger Phase: Cyber-ATX 27B Q5_K_M runs audit and vulnerability detection.
-5. Error Correction Loop: When Debugger identifies issues, Debugger is expelled from VRAM;
-   Coder (Gyro-Coder) is swapped back into VRAM to correct the detected errors.
+Features:
+1. Strict VRAM Eviction: Guarantees active model is 100% expelled (<60ms) and
+   physical VRAM is verified free (<3000 MB) before mapping next model.
+2. Windows WDDM 50% RAM Rule: Enforces sliding window pre-staging buffer to
+   prevent cudaErrorMemoryAllocation.
+3. Hardware-Aware Memory Advisor: Evaluates real GGUF tensor dimensions
+   against GPU VRAM and engine KV cache quantization formats.
+4. OpenAI-Compatible API: Intercepts /v1/chat/completions and /v1/models.
+5. Integrated Web Control Studio: Serves responsive Web UI at / and /ui.
+6. Swap Mode Toggle: Supports single-model mode (swap disabled) or dynamic
+   multi-model swapping (1, 2, 3, or N models).
 """
 
 import os
@@ -26,8 +29,19 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
 import httpx
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 import uvicorn
+
+# Import memory advisor from current directory
+try:
+    from router.memory_advisor import get_hardware_profile, evaluate_model_fit, get_gpu_vram_info
+except ImportError:
+    try:
+        from memory_advisor import get_hardware_profile, evaluate_model_fit, get_gpu_vram_info
+    except ImportError:
+        get_hardware_profile = None
+        evaluate_model_fit = None
+        get_gpu_vram_info = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,27 +51,66 @@ logging.basicConfig(
 logger = logging.getLogger("vmm-router")
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "router_config.json")
+DASHBOARD_PATH = os.path.join(os.path.dirname(__file__), "dashboard.html")
+
+
+def resolve_engine_executable(configured_path: str) -> str:
+    """Resolves engine executable from config, env vars, or standard system locations."""
+    if os.environ.get("LLAMA_SERVER_EXE") and os.path.isfile(os.environ["LLAMA_SERVER_EXE"]):
+        return os.environ["LLAMA_SERVER_EXE"]
+    
+    expanded = os.path.expandvars(configured_path)
+    if os.path.isfile(expanded):
+        return expanded
+        
+    candidates = [
+        r"C:\Users\bj_iv\Desktop\llamAmpere-Ultra\bin\Release\llama-server.exe",
+        r"D:\llamAmpere\build-sm86\bin\Release\llama-server.exe",
+        r"C:\Users\bj_iv\Desktop\llamAmpere-Ultra\build-sm86\bin\Release\llama-server.exe",
+    ]
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+            
+    # Check PATH
+    import shutil
+    path_bin = shutil.which("llama-server.exe") or shutil.which("llama-server")
+    if path_bin:
+        return path_bin
+        
+    return configured_path
+
 
 def load_config() -> Dict[str, Any]:
     if not os.path.isfile(CONFIG_PATH):
         raise FileNotFoundError(f"Configuration file missing: {CONFIG_PATH}")
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    
+    # Expand environment variables across model paths
+    models = data.get("models", {})
+    for m_key, m_val in models.items():
+        if "model_path" in m_val:
+            m_val["model_path"] = os.path.expandvars(m_val["model_path"])
+    return data
+
 
 config = load_config()
 MODELS = config.get("models", {})
 ALIASES = config.get("aliases", {})
 ROUTER_HOST = config.get("router_host", "127.0.0.1")
 ROUTER_PORT = config.get("router_port", 8000)
-ENGINE_EXE = config.get("engine_executable", r"C:\Users\bj_iv\Desktop\llamAmpere-Ultra\bin\Release\llama-server.exe")
-ENGINE_DIR = config.get("engine_working_dir", r"C:\Users\bj_iv\Desktop\llamAmpere-Ultra")
+ENGINE_EXE = resolve_engine_executable(config.get("engine_executable", "llama-server.exe"))
+ENGINE_DIR = config.get("engine_working_dir", os.path.dirname(ENGINE_EXE) if os.path.isfile(ENGINE_EXE) else ".")
+SWAP_ENABLED_DEFAULT = config.get("swap_enabled", True)
 
-# Pipeline sequence for stage transitions
-NEXT_ROLE_CHAIN = {
+# Sequential role transition chain
+NEXT_ROLE_CHAIN = config.get("next_role_chain", {
     "architect": "coder",
     "coder": "debugger",
     "debugger": "coder"
-}
+})
+
 
 def get_gpu_vram_used_mb() -> int:
     """Queries NVIDIA driver for actual physical VRAM usage in MB."""
@@ -71,6 +124,7 @@ def get_gpu_vram_used_mb() -> int:
     except Exception:
         return -1
 
+
 class VMMStateManager:
     def __init__(self):
         self.active_vram_model: Optional[str] = None
@@ -79,6 +133,7 @@ class VMMStateManager:
         self.swap_history = []
         self.running_processes: Dict[str, subprocess.Popen] = {}
         self.log_threads: Dict[str, threading.Thread] = {}
+        self.swap_enabled: bool = SWAP_ENABLED_DEFAULT
         self._lock = asyncio.Lock()
 
     def resolve_model(self, requested_name: str) -> str:
@@ -90,8 +145,9 @@ class VMMStateManager:
         for key, details in MODELS.items():
             if details.get("alias", "").lower() == req:
                 return key
-        logger.warning(f"Unknown model '{requested_name}', falling back to 'architect'")
-        return "architect"
+        first_role = list(MODELS.keys())[0] if MODELS else "architect"
+        logger.warning(f"Unknown model '{requested_name}', falling back to '{first_role}'")
+        return first_role
 
     def _stream_backend_logs(self, role_key: str, proc: subprocess.Popen):
         try:
@@ -132,7 +188,6 @@ class VMMStateManager:
             pass
 
         model_path = model_info.get("model_path", "")
-        port = model_info.get("backend_port", 8081)
         args = model_info.get("args", [])
         model_env = model_info.get("env", {})
 
@@ -171,7 +226,6 @@ class VMMStateManager:
             t.start()
             self.log_threads[role_key] = t
 
-            health_url = f"http://127.0.0.1:{port}/health"
             ready = False
             for _ in range(60):
                 if proc.poll() is not None:
@@ -203,7 +257,7 @@ class VMMStateManager:
         if role_key not in self.running_processes:
             return
 
-        logger.info(f">> [VMM EVICTION]: Evicting '{role_key}' from memory (<50ms)...")
+        logger.info(f">> [VMM EVICTION]: Evicting '{role_key}' from memory (<60ms)...")
         proc = self.running_processes.pop(role_key, None)
         if proc:
             try:
@@ -239,9 +293,8 @@ class VMMStateManager:
 
     async def ensure_active(self, target_model: str) -> float:
         """
-        Ensures target_model is active in GPU VRAM, swapping in <2.3s.
-        STRICT INVARIANT: Under NO circumstance may a model swap into VRAM
-        without the previous VRAM model being 100% expelled and VRAM cleared.
+        Ensures target_model is active in GPU VRAM.
+        If swap_enabled is False, only the initial or currently running model is permitted.
         """
         async with self._lock:
             t0 = time.perf_counter()
@@ -250,16 +303,20 @@ class VMMStateManager:
             if prev_model == target_model and target_model in self.running_processes:
                 return 0.0
 
+            # If swap is disabled, refuse switching if another model is already active
+            if not self.swap_enabled and prev_model is not None and prev_model != target_model:
+                logger.warning(f">> [SWAP DISABLED]: Request for '{target_model}' redirected to active '{prev_model}'.")
+                return 0.0
+
             # STRICT RULE ENFORCEMENT:
-            # If any other model occupies VRAM, expel it and verify physical VRAM release
             if prev_model is not None and prev_model != target_model:
                 logger.info(f">> [VMM STRICT RULE]: '{prev_model}' occupies VRAM. Expelling before swap to '{target_model}'...")
                 self.enforce_vram_eviction(prev_model)
 
-            # Extra safety check: if physical VRAM is still elevated (> 6000 MB), clear orphaned processes
+            # Safety barrier: if physical VRAM is still elevated (> 6000 MB), clear orphaned processes
             vram_check = get_gpu_vram_used_mb()
             if vram_check > 6000:
-                logger.warning(f">> [VMM SAFETY GUARD]: Physical VRAM is high ({vram_check} MB). Cleansing all non-target processes...")
+                logger.warning(f">> [VMM SAFETY GUARD]: Physical VRAM is high ({vram_check} MB). Cleansing non-target processes...")
                 for r in list(self.running_processes.keys()):
                     if r != target_model:
                         self.evict_backend(r)
@@ -288,14 +345,18 @@ class VMMStateManager:
         for role in list(self.running_processes.keys()):
             self.evict_backend(role)
 
+
 state = VMMStateManager()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("=" * 65)
-    logger.info("  llamampere-vmm-swap: Pipelined 3-Model VMM Engine")
-    logger.info("  Enforcing STRICT VRAM Eviction Rule & 96k Ampere Parameters")
-    logger.info("=" * 65)
+    logger.info("=" * 68)
+    logger.info("  cuda-vmm-swap: Pipelined VMM Hot-Swap Engine Active")
+    logger.info("  Enforcing STRICT VRAM Eviction Rule & Windows WDDM Pinned Cap")
+    logger.info(f"  Engine Executable: {ENGINE_EXE}")
+    logger.info(f"  Swap Enabled: {state.swap_enabled}")
+    logger.info("=" * 68)
 
     # Clean any dangling llama-server processes
     try:
@@ -304,28 +365,116 @@ async def lifespan(app: FastAPI):
         pass
     time.sleep(1.0)
 
-    # Cold boot: ONLY boot Architect into VRAM cleanly
-    state.start_backend("architect")
-    state.active_vram_model = "architect"
+    # Cold boot initial model cleanly into VRAM
+    initial_role = list(MODELS.keys())[0] if MODELS else "architect"
+    state.start_backend(initial_role)
+    state.active_vram_model = initial_role
 
     logger.info("\n=======================================================")
     logger.info(f"  VMM ROUTER READY ON PORT {ROUTER_PORT}")
-    logger.info(f"  - Active in VRAM: Architect (ATX-Swift-1.5 Q5_K_M :8081)")
-    logger.info(f"  - Coder Role: Gyro-Coder TQ2_0 (:8082) [19.9GB VRAM Expert Layer]")
-    logger.info(f"  - Debugger Role: Cyber-ATX Q5_K_M (:8083)")
-    logger.info(f"  - Strict Rule: Zero VRAM overlap allowed on swap")
+    logger.info(f"  - Active in VRAM: {initial_role.upper()}")
+    logger.info(f"  - Configured Slots: {list(MODELS.keys())}")
+    logger.info(f"  - Control Studio UI: http://{ROUTER_HOST}:{ROUTER_PORT}/")
     logger.info("=======================================================\n")
 
     yield
 
     state.shutdown_all()
 
+
 app = FastAPI(
-    title="llamampere-vmm-swap Router",
+    title="cuda-vmm-swap Router & Control Studio",
     description="OpenAI-compatible reverse proxy with Strict VRAM Eviction and sub-2.3s VMM swap",
-    version="2.2.0",
+    version="2.3.0",
     lifespan=lifespan
 )
+
+
+# =====================================================================
+# WEB CONTROL STUDIO & TELEMETRY ROUTES
+# =====================================================================
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/ui", response_class=HTMLResponse)
+async def serve_control_studio():
+    """Serves the integrated mobile touch-friendly Control Studio dashboard."""
+    if os.path.isfile(DASHBOARD_PATH):
+        with open(DASHBOARD_PATH, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse("<h2>Dashboard template not found. Please verify router/dashboard.html</h2>")
+
+
+@app.get("/status")
+async def get_status():
+    hw_info = get_hardware_profile() if get_hardware_profile else {}
+    return {
+        "active_vram_model": state.active_vram_model,
+        "staged_ram_model": state.staged_ram_model,
+        "physical_vram_used_mb": get_gpu_vram_used_mb(),
+        "running_models": list(state.running_processes.keys()),
+        "last_swap_latency_seconds": round(state.last_swap_latency, 4),
+        "recent_swaps": state.swap_history[-5:],
+        "configured_models": list(MODELS.keys()),
+        "swap_enabled": state.swap_enabled,
+        "models": MODELS,
+        "hardware": hw_info
+    }
+
+
+@app.post("/v1/vmm/swap")
+async def manual_swap(request: Request):
+    """Manually triggers a sub-2.3s VMM hot-swap to target model."""
+    body = await request.json()
+    target_role = state.resolve_model(body.get("model", "architect"))
+    latency = await state.ensure_active(target_role)
+    return {
+        "status": "success",
+        "active_model": state.active_vram_model,
+        "swap_latency_seconds": round(latency, 4),
+        "vram_used_mb": get_gpu_vram_used_mb()
+    }
+
+
+@app.post("/api/toggle-swap")
+async def toggle_swap():
+    state.swap_enabled = not state.swap_enabled
+    logger.info(f">> [TOGGLE] swap_enabled changed to: {state.swap_enabled}")
+    return {"swap_enabled": state.swap_enabled}
+
+
+@app.post("/api/evict-all")
+async def evict_all():
+    state.shutdown_all()
+    state.active_vram_model = None
+    time.sleep(0.5)
+    return {"status": "evicted", "vram_used_mb": get_gpu_vram_used_mb()}
+
+
+@app.post("/api/evaluate")
+async def evaluate_budget(request: Request):
+    """Evaluates memory fit using GGUF metadata parser and engine KV specs."""
+    if not evaluate_model_fit:
+        raise HTTPException(status_code=500, detail="memory_advisor module not loaded")
+    body = await request.json()
+    model_path = body.get("model_path", "")
+    context_tokens = int(body.get("context", 98304))
+    engine_type = body.get("engine", "llamampere")
+    ctk = body.get("ctk", None)
+    ctv = body.get("ctv", None)
+    
+    result = evaluate_model_fit(
+        model_path=model_path,
+        context_tokens=context_tokens,
+        engine_type=engine_type,
+        ctk=ctk,
+        ctv=ctv
+    )
+    return result
+
+
+# =====================================================================
+# OPENAI COMPATIBILITY ENDPOINTS (PASEO & PI-CODING-AGENT)
+# =====================================================================
 
 @app.get("/v1/models")
 async def list_models():
@@ -335,7 +484,7 @@ async def list_models():
             "id": key,
             "object": "model",
             "created": 1700000000,
-            "owned_by": "llamampere-vmm-swap",
+            "owned_by": "cuda-vmm-swap",
             "metadata": {
                 "role": info.get("role"),
                 "vram_gb": info.get("vram_gb"),
@@ -347,17 +496,6 @@ async def list_models():
         })
     return {"object": "list", "data": data}
 
-@app.get("/status")
-async def get_status():
-    return {
-        "active_vram_model": state.active_vram_model,
-        "staged_ram_model": state.staged_ram_model,
-        "physical_vram_used_mb": get_gpu_vram_used_mb(),
-        "running_models": list(state.running_processes.keys()),
-        "last_swap_latency_seconds": round(state.last_swap_latency, 4),
-        "recent_swaps": state.swap_history[-5:],
-        "configured_models": list(MODELS.keys())
-    }
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
@@ -367,12 +505,20 @@ async def chat_completions(request: Request):
     target_info = MODELS.get(target_key, {})
     backend_port = target_info.get("backend_port", 8081)
 
-    # STRICT INVARIANT: Ensure previous model is expelled before target swaps into VRAM
-    await state.ensure_active(target_key)
+    # Ensure model is active in VRAM (or proxy to current if swap disabled)
+    if state.swap_enabled:
+        await state.ensure_active(target_key)
+    else:
+        # If swap disabled, route to active model
+        if state.active_vram_model and state.active_vram_model in state.running_processes:
+            target_key = state.active_vram_model
+            target_info = MODELS.get(target_key, {})
+            backend_port = target_info.get("backend_port", 8081)
+        else:
+            await state.ensure_active(target_key)
 
     # Rewrite model name to match backend alias
     body["model"] = target_info.get("alias", requested_model)
-
     target_url = f"http://127.0.0.1:{backend_port}/v1/chat/completions"
     is_streaming = body.get("stream", False)
 
@@ -383,10 +529,9 @@ async def chat_completions(request: Request):
             resp = await client.post(target_url, json=body)
             await client.aclose()
 
-            # If Debugger just completed inference, evict Debugger from VRAM immediately!
-            # This prepares VRAM for Coder (Gyro-Coder) to swap in cleanly without waiting.
-            if target_key == "debugger":
-                logger.info(">> [DEBUGGER INFERENCE COMPLETE]: Expelling Debugger from VRAM to prepare clean swap for Coder...")
+            # Evict debugger immediately after completion to clear VRAM for closed-loop coder fix
+            if state.swap_enabled and target_key == "debugger":
+                logger.info(">> [DEBUGGER INFERENCE COMPLETE]: Expelling Debugger from VRAM...")
                 state.enforce_vram_eviction("debugger")
 
             return JSONResponse(status_code=resp.status_code, content=resp.json())
@@ -401,8 +546,8 @@ async def chat_completions(request: Request):
             finally:
                 await resp.aclose()
                 await client.aclose()
-                if target_key == "debugger":
-                    logger.info(">> [DEBUGGER STREAM COMPLETE]: Expelling Debugger from VRAM to prepare clean swap for Coder...")
+                if state.swap_enabled and target_key == "debugger":
+                    logger.info(">> [DEBUGGER STREAM COMPLETE]: Expelling Debugger from VRAM...")
                     state.enforce_vram_eviction("debugger")
 
         return StreamingResponse(
@@ -416,13 +561,16 @@ async def chat_completions(request: Request):
         logger.error(f"Error forwarding request to {target_url}: {e}")
         raise HTTPException(status_code=502, detail=f"Failed to communicate with local model backend: {e}")
 
+
 def main():
-    print("=" * 65)
-    print("  llamampere-vmm-swap: Pipelined Router Active")
-    print("  Strict VRAM Eviction Rule & 96k Context Enforced")
-    print(f"  Listening on: http://{ROUTER_HOST}:{ROUTER_PORT}/v1")
-    print("=" * 65)
+    print("=" * 68)
+    print("  cuda-vmm-swap: Pipelined Router & Control Studio Active")
+    print("  Strict VRAM Eviction Rule & Engine-Aware Memory Budgets")
+    print(f"  Listening on: http://{ROUTER_HOST}:{ROUTER_PORT}")
+    print(f"  Dashboard:    http://{ROUTER_HOST}:{ROUTER_PORT}/ui")
+    print("=" * 68)
     uvicorn.run(app, host=ROUTER_HOST, port=ROUTER_PORT, log_level="info")
+
 
 if __name__ == "__main__":
     main()

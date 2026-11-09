@@ -19,6 +19,7 @@ import urllib.error
 ROUTER_STATUS_URL = "http://127.0.0.1:8000/status"
 ROUTER_SWAP_URL = "http://127.0.0.1:8000/v1/vmm/swap"
 ROUTER_CHAT_URL = "http://127.0.0.1:8000/v1/chat/completions"
+ROUTER_EVAL_URL = "http://127.0.0.1:8000/api/evaluate"
 
 TOOLS = [
     {
@@ -27,6 +28,36 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {}
+        }
+    },
+    {
+        "name": "vmm_get_memory_budget",
+        "description": "Calculates exact GPU VRAM and Windows WDDM 50% pinned RAM limits for a given model, context size, and KV cache quantization format.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "model_path": {
+                    "type": "string",
+                    "description": "Optional path to GGUF model file"
+                },
+                "context": {
+                    "type": "integer",
+                    "description": "Context tokens (default 98304)"
+                },
+                "engine": {
+                    "type": "string",
+                    "enum": ["llamampere", "llamacpp"],
+                    "description": "Inference engine type"
+                },
+                "ctk": {
+                    "type": "string",
+                    "description": "KV Key quantization (turbo5, q8_0, q4_0, f16)"
+                },
+                "ctv": {
+                    "type": "string",
+                    "description": "KV Value quantization (turbo4, q8_0, q4_0, f16)"
+                }
+            }
         }
     },
     {
@@ -77,6 +108,36 @@ def handle_vmm_list_models() -> dict:
             return {"content": [{"type": "text", "text": json.dumps(data, indent=2)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": f"Router offline or error: {e}"}], "isError": True}
+
+def handle_vmm_get_memory_budget(args: dict) -> dict:
+    try:
+        payload = json.dumps({
+            "model_path": args.get("model_path", ""),
+            "context": args.get("context", 98304),
+            "engine": args.get("engine", "llamampere"),
+            "ctk": args.get("ctk", "turbo5"),
+            "ctv": args.get("ctv", "turbo4")
+        }).encode("utf-8")
+        req = urllib.request.Request(ROUTER_EVAL_URL, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return {"content": [{"type": "text", "text": json.dumps(data, indent=2)}]}
+    except Exception as e:
+        # Fallback to local memory_advisor
+        try:
+            import os, sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "router"))
+            from memory_advisor import evaluate_model_fit
+            res = evaluate_model_fit(
+                model_path=args.get("model_path", ""),
+                context_tokens=args.get("context", 98304),
+                engine_type=args.get("engine", "llamampere"),
+                ctk=args.get("ctk", "turbo5"),
+                ctv=args.get("ctv", "turbo4")
+            )
+            return {"content": [{"type": "text", "text": json.dumps(res, indent=2)}]}
+        except Exception as ex:
+            return {"content": [{"type": "text", "text": f"Memory budget evaluation failed: {e} | Fallback error: {ex}"}], "isError": True}
 
 def handle_vmm_swap_model(target_model: str) -> dict:
     try:
@@ -156,6 +217,8 @@ def main():
             args = params.get("arguments", {})
             if tool_name == "vmm_list_models":
                 res = handle_vmm_list_models()
+            elif tool_name == "vmm_get_memory_budget":
+                res = handle_vmm_get_memory_budget(args)
             elif tool_name == "vmm_swap_model":
                 res = handle_vmm_swap_model(args.get("target_model", "architect"))
             elif tool_name == "vmm_query_agent":

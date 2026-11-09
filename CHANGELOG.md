@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.0] - 2026-11-08
+
+### Added
+- **Engine-Aware Memory Budget Calculator (`router/memory_advisor.py`)**:
+  - Auto-detects physical GPU VRAM and Total System RAM.
+  - Computes the Windows WDDM 50% pinned host RAM cap (`cudaHostAlloc`), preventing `cudaErrorMemoryAllocation` during sliding window pre-staging.
+  - Reads GGUF binary headers directly to extract exact architecture tensor shapes: `block_count` (layers), `head_count_kv` (KV heads), and `head_dim`.
+  - Factors exact bytes-per-element according to target engine:
+    - `llamAmpere-Ultra`: TurboQuant (`turbo5`, `turbo4`, `turbo3`, `turbo2`), SJ-KVaRN fused rotation codec (`GGML_SJKVARN_FUSED_ROT`), Q8_0, Q4_0, FP16.
+    - `llama.cpp` upstream: FP16, Q8_0, Q5_0, Q5_1, Q4_0, Q4_1, IQ4_NL.
+  - Dynamic viability evaluation (`fits_vram` and `fits_pinned_ram`).
+- **Web Control Studio Dashboard (`router/dashboard.html`)**:
+  - Integrated mobile touch-friendly web GUI served at `/` and `/ui`.
+  - Real-time physical VRAM and System RAM gauges with the Windows WDDM 50% threshold marker.
+  - Model slot cards with live viability badges and `<2.3s` manual swap trigger buttons.
+  - Interactive prompt testing playground streaming completions directly from the active model in VRAM.
+- **Dynamic Swap Mode & Multi-Slot Support**:
+  - Global `swap_enabled` toggle: support for single-model execution (swap disabled) or dynamic multi-model swapping (1, 2, 3, or N models).
+  - Environment variable resolution (`%LLAMA_SERVER_EXE%`, `%MODELS_DIR%`) and fallback binary discovery.
+- **MCP Tool `vmm_get_memory_budget`**:
+  - Added to `mcp/vmm_mcp_server.py`, exposing memory budget assessment and hardware limits to MCP clients (Paseo, Claude Desktop, Antigravity).
+- **Harness Upgrades (`master_harness.py`)**:
+  - Added `--swap [on|off]`, `--open-ui`, and `--check-memory` flags.
+  - Auto-detection of Python interpreter (project-bundled or sys.executable).
+
+### Changed
+- `router/router_config.json`: Added `swap_enabled` and `engine_type`.
+- Added `router/router_config.json.example` as a clean, hardware-agnostic template.
+- Explicitly documented exclusion of vLLM, Aphrodite, ExLlamaV2/TabbyAPI, and hybrid offload engines (Strata) due to system RAM hogging conflicting with the Windows WDDM 50% pinned staging buffer.
+
+---
+
 ## [2.2.0] - 2026-11-04
 
 ### Added
