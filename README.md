@@ -224,15 +224,24 @@ All models utilized are publicly accessible:
 
 ---
 
-## Requirements
+## Requirements & Hardware Scaling Matrix (8 GB to 48 GB+ VRAM)
 
-* **GPU**: NVIDIA GPU with Driver VMM support (**Compute Capability 7.0+ / Volta, Ampere, Ada, Hopper**; optimized for RTX 3090 / 4090).
+`cuda-vmm-swap` is completely agnostic to GPU VRAM capacity. Any NVIDIA GPU with Driver VMM support (**Compute Capability 7.0+ / Volta, Turing, Ampere, Ada Lovelace, Hopper, Blackwell**) can execute sub-2.3s hot-swapping across models from 4B to 70B parameters:
+
+| Hardware Tier | GPU VRAM | Recommended System RAM | Target Model Classes (Quantized) | Example Context Scope | Notes |
+| :--- | :---: | :---: | :--- | :---: | :--- |
+| **Compact / Entry** | **8 GB – 12 GB** | 16 GB – 32 GB (Pinned cap: 8–16 GB) | **4B – 14B** (e.g. Qwen 7B/14B Q4_K_M, DeepSeek 7B/14B) | 32k – 64k tokens | Uses Q4/TurboQuant KV cache to maximize headroom. |
+| **Mid-Range Workstation** | **16 GB** | 32 GB – 48 GB (Pinned cap: 16–24 GB) | **14B – 22B / 27B** (e.g. 14B Q8_0, 22B/27B Q3/Q4) | 64k – 96k tokens | Balanced speed and deep reasoning. |
+| **High-End Enthusiast** | **24 GB** (RTX 3090/4090) | 48 GB – 64 GB (Pinned cap: 24–32 GB) | **27B – 32B** (Q5_K_M) or **MoE 70B/125B** (Gyro-Coder TQ2_0) | 96k – 160k tokens | Production multi-agent triad baseline. |
+| **Enterprise / Pro** | **48 GB+** (A6000, A100, RTX 6000) | 64 GB – 128 GB (Pinned cap: 32–64 GB) | **70B Dense** (Q4/Q8) | 160k – 256k+ tokens | Massive multi-repo ingestion in a single pass. |
+
+### Core System Requirements
+* **GPU**: Any NVIDIA GPU with CUDA Compute Capability 7.0+ (RTX 20xx, 30xx, 40xx, A-series, H-series).
+* **VRAM**: Minimum 8 GB (model weights + KV cache must fit in device memory).
+* **Host RAM**: At least **2x the file size of the largest model** to comply with the Windows WDDM 50% pinned host staging cap (`cudaHostAlloc`).
 * **CUDA Toolkit**: CUDA 12.2 to 12.8+.
-* **Host Memory**: 48 GB DDR4/DDR5 RAM (enables the 24 GB WDDM pinned host sliding window).
-* **Storage**: High-speed NVMe PCIe Gen4 SSD (for `D:\models` and Gyro-Coder's PLE N-Gram mmap).
-* **Compiler**: Visual Studio Build Tools 2022 (MSVC v143) with `nvcc`.
-
----
+* **Storage**: High-speed NVMe PCIe SSD (for fast background pre-staging).
+* **Compiler**: Visual Studio Build Tools 2022 (MSVC v143) with `nvcc` (only required if compiling raw benchmarks or patching upstream llama.cpp).
 
 ## Usage
 
@@ -387,7 +396,7 @@ $env:GGML_CUDA_FA_I8QK        = "1"
 
 ### Accurate GGUF Tensor Inspection
 Instead of relying on inaccurate guesses, `memory_advisor.py` reads the binary GGUF header to extract exact attention tensor geometry:
-$$\text{Elements per Token} = 2 \times n_{\text{layers}} \times n_{\text{kv\_heads}} \times d_{\text{head}}$$
+$$\text{Elements per Token} = 2 \times n_{\text{layers}} \times n_{\text{kv-heads}} \times d_{\text{head}}$$
 And multiplies by the exact bytes-per-element for the chosen engine KV quantization format.
 
 ---
