@@ -5,8 +5,8 @@
   "engine_type": "llamampere",
   "vmm_sleep_idle_seconds": 3,
   "max_resident_models": 2,
-  "engine_executable": "C:\\Users\\bj_iv\\Desktop\\llamAmpere-Ultra\\bin\\Release\\llama-server.exe",
-  "engine_working_dir": "C:\\Users\\bj_iv\\Desktop\\llamAmpere-Ultra",
+  "engine_executable": "%LLAMA_SERVER_EXE%",
+  "engine_working_dir": "%ENGINE_DIR%",
   "models": {
     "architect": {
       "alias": "ATX-Swift-1.5-27B-Uncensored-i1Q5_K_M",
@@ -49,7 +49,7 @@
         "--spec-draft-n-min-adaptive", "3",
         "--spec-draft-n-max", "5",
         "--spec-draft-p-min", "0",
-        "--spec-draft-vocab-map", "C:/Users/bj_iv/Desktop/llamAmpere-Ultra/docs/mtp-vocab/atx_65536.txt",
+        "--spec-draft-vocab-map", "%ENGINE_DIR%/docs/mtp-vocab/atx_65536.txt",
         "--spec-draft-backend-sampling",
         "--reasoning", "on",
         "--reasoning-format", "deepseek",
@@ -141,7 +141,7 @@
         "--spec-draft-n-min-adaptive", "3",
         "--spec-draft-n-max", "5",
         "--spec-draft-p-min", "0",
-        "--spec-draft-vocab-map", "C:/Users/bj_iv/Desktop/llamAmpere-Ultra/docs/mtp-vocab/atx_65536.txt",
+        "--spec-draft-vocab-map", "%ENGINE_DIR%/docs/mtp-vocab/atx_65536.txt",
         "--spec-draft-backend-sampling",
         "--reasoning", "on",
         "--reasoning-format", "deepseek",

@@ -321,11 +321,11 @@ $env:GGML_CUDA_FA_I8QK        = "1"
   - Shortcut to launch the Web Control Studio in the browser.
   - Install in Paseo:
     ```bash
-    # From repo root (note leading ./):
+    # From repository root (note leading ./):
     paseo plugin install ./extensions/paseo-vmm-swap
 
-    # Or absolute path:
-    paseo plugin install c:/Users/bj_iv/Desktop/cuda-vmm-swap/extensions/paseo-vmm-swap
+    # Or using your absolute local path:
+    paseo plugin install /absolute/path/to/cuda-vmm-swap/extensions/paseo-vmm-swap
     ```
 * **Pi-Coding-Agent Skill (`extensions/pi-coding-agent/SKILL.md`)**:
   - Autonomous agent skill for `@mariozechner/pi-coding-agent`.

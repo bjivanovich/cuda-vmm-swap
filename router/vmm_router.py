@@ -27,6 +27,7 @@ import subprocess
 import threading
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
+from pathlib import Path
 import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
@@ -63,10 +64,11 @@ def resolve_engine_executable(configured_path: str) -> str:
     if os.path.isfile(expanded):
         return expanded
         
+    home_desktop = Path.home() / "Desktop" / "llamAmpere-Ultra"
     candidates = [
-        r"C:\Users\bj_iv\Desktop\llamAmpere-Ultra\bin\Release\llama-server.exe",
+        str(home_desktop / "bin" / "Release" / "llama-server.exe"),
+        str(home_desktop / "build-sm86" / "bin" / "Release" / "llama-server.exe"),
         r"D:\llamAmpere\build-sm86\bin\Release\llama-server.exe",
-        r"C:\Users\bj_iv\Desktop\llamAmpere-Ultra\build-sm86\bin\Release\llama-server.exe",
     ]
     for c in candidates:
         if os.path.isfile(c):
@@ -87,11 +89,18 @@ def load_config() -> Dict[str, Any]:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
     
-    # Expand environment variables across model paths
+    # Expand environment variables across paths and arguments
+    if "engine_working_dir" in data:
+        data["engine_working_dir"] = os.path.expandvars(data["engine_working_dir"])
+    if "engine_executable" in data:
+        data["engine_executable"] = os.path.expandvars(data["engine_executable"])
+
     models = data.get("models", {})
     for m_key, m_val in models.items():
         if "model_path" in m_val:
             m_val["model_path"] = os.path.expandvars(m_val["model_path"])
+        if "args" in m_val:
+            m_val["args"] = [os.path.expandvars(arg) for arg in m_val["args"]]
     return data
 
 
