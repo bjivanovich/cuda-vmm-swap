@@ -4,7 +4,7 @@
 
 Engine-agnostic patch, architecture, and benchmarks for running multi-agent LLM pipelines on a single GPU — verified on a single **NVIDIA GeForce RTX 3090 (24 GB VRAM)** running a sequential 3-agent pipeline: **Architect -> Coder -> Debugger/Auditor**, supporting models from 14.3 GB to 19.9 GB VRAM active footprint with context windows up to **96k - 200k+ tokens**.
 
-Compatible with upstream `llama.cpp`, `llamAmpere-Ultra`, `Strata`, and custom CUDA inference runtimes.
+Compatible with upstream `llama.cpp`, `llamAmpere-Ultra`, and custom CUDA inference runtimes.
 
 > **Credit & Acknowledgement:** The core low-level VMM `sleep` / `wake` concept was pioneered by Reddit user
 > **u/enndeeee** in [Infernix PR #43](https://github.com/infernix/llama.cpp/pull/43) (`SleepableBuffer`).
