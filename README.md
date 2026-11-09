@@ -267,117 +267,117 @@ $env:GGML_CUDA_FA_I8QK        = "1"
 
 ---
 
-## The 4 Operational Methods & Harness Integrations
+## The 4 Integration Architectures
 
-To make sub-2.3s VMM swap immediately usable across any development workflow (CLI or GUI), four distinct integration layers are provided:
+`cuda-vmm-swap` provides four distinct, non-overlapping integration layers tailored to different developer workflows (from desktop GUI agents to IDEs and headless pipelines):
 
-### 1. OpenAI-Compatible Fast-Swap Router & Web Control Studio (`router/vmm_router.py`)
-
-A high-performance reverse proxy that exposes a standard `/v1/chat/completions` endpoint on `http://127.0.0.1:8000/v1` and serves an integrated mobile touch-friendly **Web Control Studio** at `http://127.0.0.1:8000/ui`.
-
-```bash
-# Start the VMM Router & Control Studio
-python router/vmm_router.py
 ```
-
-* **Web Control Studio (`http://127.0.0.1:8000/ui`)**:
-  - Live VRAM and System RAM gauges with the Windows WDDM 50% pinned memory limit indicator.
-  - Slot cards with real-time viability evaluation badges: Green `[VIABLE]` or Red `[OOM RISK]`.
-  - Global `[SWAP: ENABLED / DISABLED]` toggle.
-  - `<2.3s` manual swap trigger buttons and live interactive prompt testing playground.
-* **Seamless Integration with Paseo & `pi-coding-agent`**:
-  Set your local provider base URL in `~/.pi/agent/models.json`:
-  ```json
-  "providers": {
-    "local-llm": {
-      "baseUrl": "http://127.0.0.1:8000/v1",
-      "api": "openai-completions",
-      "apiKey": "local-dummy"
-    }
-  }
-  ```
-  Paseo and Pi simply request `"model": "architect"`, `"model": "coder"`, or `"model": "debugger"`. The router handles strict VRAM eviction and DMA hot-swapping transparently.
-
-### 2. Native Multi-Instance Engine Sleep/Wake (`llama-server`)
-
-Execute independent `llama-server.exe` instances on dedicated ports (e.g. `:8081`, `:8082`, `:8083`) with:
-```bash
-set LLAMAMPERE_ENABLE_SLEEP=1
-llama-server.exe -m model.gguf --sleep-idle-seconds 3 --port 8081 ...
-```
-When idle for 3 seconds, `handle_sleeping_state(true)` calls `llama_model_sleep()`, unmapping physical VRAM in `<60ms` (`cuMemUnmap`). Upon receiving an HTTP request, `handle_sleeping_state(false)` calls `llama_model_wake()`, remapping VRAM via PCIe DMA in `<2.3s`.
-
-### 3. Model Context Protocol (MCP) Server (`mcp/vmm_mcp_server.py`)
-
-Integrates directly into **Paseo** (which supports `"mcp": { "injectIntoAgents": true }`), **Google Antigravity IDE**, **Claude Desktop**, or **Cursor** via stdio JSON-RPC.
-
-```json
-{
-  "mcpServers": {
-    "vmm-controller": {
-      "command": "python",
-      "args": ["C:/path/to/cuda-vmm-swap/mcp/vmm_mcp_server.py"]
-    }
-  }
-}
-```
-Exposes 4 tools natively:
-* `vmm_list_models`: Discovers active VRAM residency, running backends, and swap latency history.
-* `vmm_get_memory_budget`: Evaluates hardware VRAM, system RAM, and Windows WDDM limits for any GGUF model and KV quantization format.
-* `vmm_swap_model`: Manually commands a sub-2.3s VMM hot-swap to target model role.
-* `vmm_query_agent`: Dispatches prompts directly to specialized agent roles with transparent VMM swap.
-
-### 4. Master Harness & Autonomous Pipeline (`master_harness.py` & `pipeline/autonomous_pipeline.py`)
-
-Programmatic CLI runners for automated multi-model pipelines:
-
-```bash
-# Launch master harness with swap toggle and browser UI
-python master_harness.py --swap on --open-ui
-
-# Run hardware detection and memory budget check
-python master_harness.py --check-memory
-
-# Execute autonomous 4-stage software engineering pipeline with closed-loop fix
-python pipeline/autonomous_pipeline.py --task "Create an async telemetry engine with shared memory ring buffers"
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   CUDA-VMM-SWAP CORE                                   │
+│            Strict VRAM Eviction Barrier (<60ms) | Sub-2.3s PCIe DMA Hot-Swap           │
+│                    Windows WDDM 50% Pinned Memory Cap Guardian                         │
+└──────────────┬─────────────────────────┬───────────────────────┬───────────────────────┘
+               │                         │                       │                       │
+               ▼                         ▼                       ▼                       ▼
+    [1. HTTP ROUTER & WEB UI]    [2. AGENT EXTENSIONS]       [3. MCP SERVER]     [4. SWARM HARNESS CLI]
+    • Reverse Proxy (:8000/v1)   • Paseo Desktop Plugin      • stdio JSON-RPC    • master_harness.py
+    • Web Control Studio (/ui)   • Pi-Coding-Agent Skill     • Antigravity /     • autonomous_pipeline.py
+    • Any HTTP / OpenAI client   • 1-Click UI VRAM buttons     Claude / Cursor   • Closed-loop sandbox
 ```
 
 ---
 
-## Official Extensions & Ecosystem Plugins
-
-To integrate `cuda-vmm-swap` directly into agentic desktop applications and developer IDEs, the following first-party extensions are included:
-
-### 1. Paseo Desktop UI Plugin (`extensions/paseo-vmm-swap`)
-A native desktop plugin for [Paseo](https://app.paseo.sh) built with the Paseo Plugin SDK (`@getpaseo/plugin`):
-* **Sidebar Screen**: Adds a dedicated `VMM Swap` navigation row and status screen in Paseo.
-* **Live Telemetry**: Real-time physical VRAM gauge and active model indicators polled every 3s via daemon RPCs (`vmm.status`).
-* **1-Click Model Swapping**: Touch-friendly buttons to command instant VMM hot-swaps to `architect`, `coder`, or `debugger` (`vmm.swap`).
-* **Web Studio Shortcut**: Direct link to open the full Web Control Studio in the browser.
-* **Installation in Paseo**:
+### Architecture 1: OpenAI-Compatible Fast-Swap Router & Web Control Studio
+**Primary interface for HTTP clients, scripts, and visual browser monitoring.**
+* **Router Endpoint**: Exposes standard OpenAI `/v1/chat/completions` and `/v1/models` on `http://127.0.0.1:8000/v1`.
+* **Integrated Web Control Studio**: Serves a mobile touch-friendly visual dashboard at `http://127.0.0.1:8000/ui` (and `/`):
+  - Real-time physical VRAM and System RAM gauges with the Windows WDDM 50% pinned threshold marker.
+  - Model slot cards with live viability badges (Green `[VIABLE]` or Red `[OOM RISK]`).
+  - Global `[SWAP: ENABLED / DISABLED]` toggle switch.
+  - Manual `<2.3s` swap trigger buttons and interactive prompt testing playground.
+* **Launch**:
   ```bash
-  paseo plugin install extensions/paseo-vmm-swap
+  python router/vmm_router.py
   ```
 
-### 2. Pi-Coding-Agent Skill (`extensions/pi-coding-agent/SKILL.md`)
-An autonomous agent skill for `@mariozechner/pi-coding-agent`:
-* Teaches Pi how to orchestrate multi-agent roles (`architect` -> `coder` -> `debugger`) through `http://127.0.0.1:8000/v1`.
-* Enforces the Windows WDDM 50% pinned memory limit and strict VRAM eviction barrier.
-* Pre-installed in `~/.pi/agent/skills/vmm-swap/SKILL.md` for zero-configuration activation.
+---
 
-### 3. Model Context Protocol (MCP) Server (`mcp/vmm_mcp_server.py`)
-Exposes 4 native tools for Paseo, Google Antigravity, Cursor, and Claude Desktop:
-* `vmm_list_models`: Discovers active residency and latencies.
-* `vmm_get_memory_budget`: Evaluates hardware VRAM, system RAM, and Windows WDDM limits for any GGUF model and KV format.
-* `vmm_swap_model`: Commands a sub-2.3s VMM swap.
-* `vmm_query_agent`: Queries a specialized agent role with transparent swap.
+### Architecture 2: Native Agent Ecosystem Extensions (Paseo & Pi)
+**First-party client extensions for autonomous desktop coding agents.**
+* **Paseo Desktop UI Plugin (`extensions/paseo-vmm-swap`)**:
+  - Native plugin built with the Paseo Plugin SDK (`@getpaseo/plugin`).
+  - Adds a dedicated `VMM Swap` navigation row and screen to the Paseo desktop application.
+  - Live physical VRAM gauge polled every 3s via daemon RPCs (`vmm.status`).
+  - 1-click touch buttons to command instant VMM hot-swaps to `architect`, `coder`, or `debugger` (`vmm.swap`).
+  - Shortcut to launch the Web Control Studio in the browser.
+  - Install in Paseo:
+    ```bash
+    paseo plugin install extensions/paseo-vmm-swap
+    ```
+* **Pi-Coding-Agent Skill (`extensions/pi-coding-agent/SKILL.md`)**:
+  - Autonomous agent skill for `@mariozechner/pi-coding-agent`.
+  - Teaches Pi how to orchestrate multi-agent roles (`architect` -> `coder` -> `debugger`) through `http://127.0.0.1:8000/v1`.
+  - Automatically respects the Windows WDDM 50% pinned memory limit and strict VRAM eviction barrier.
+  - Pre-installed in `~/.pi/agent/skills/vmm-swap/SKILL.md` for zero-configuration activation.
+
+---
+
+### Architecture 3: Model Context Protocol (MCP) Server
+**Tool-calling interface for AI IDEs and MCP-compliant agent environments.**
+* **Compatible with**: Google Antigravity IDE, Claude Desktop, Cursor, Continue.dev, and Paseo (with MCP injection).
+* **Location**: `mcp/vmm_mcp_server.py` (communicates over standard stdio JSON-RPC).
+* **Configuration** (e.g. in `claude_desktop_config.json` or Antigravity MCP settings):
+  ```json
+  {
+    "mcpServers": {
+      "vmm-controller": {
+        "command": "python",
+        "args": ["C:/path/to/cuda-vmm-swap/mcp/vmm_mcp_server.py"]
+      }
+    }
+  }
+  ```
+* **Exposed Tools**:
+  - `vmm_get_memory_budget`: Evaluates hardware VRAM, system RAM, and Windows WDDM limits for any GGUF model and KV format before invocation.
+  - `vmm_list_models`: Discovers active VRAM residency, running backends, and swap latency history.
+  - `vmm_swap_model`: Manually commands a sub-2.3s VMM hot-swap to target model role.
+  - `vmm_query_agent`: Dispatches prompts directly to specialized agent roles with transparent VMM swap.
+
+---
+
+### Architecture 4: Master Harness & Autonomous Pipeline CLI
+**Headless orchestration for end-to-end multi-agent software engineering.**
+* **Master Harness (`master_harness.py`)**:
+  - Supervisor script managing the router process with automatic health monitoring and Python discovery.
+  - CLI flags: `--swap [on|off]`, `--check-memory` (hardware audit), `--open-ui` (browser dashboard).
+  ```bash
+  python master_harness.py --swap on --open-ui
+  ```
+* **Autonomous Closed-Loop Pipeline (`pipeline/autonomous_pipeline.py`)**:
+  - Sequentially coordinates the 4-stage engineering triad:
+    1. **Architect** (`ATX-Swift-1.5 Q5_K_M`): Synthesizes system architecture and interface contracts.
+    2. **Coder** (`Gyro-Coder TQ2_0`): Swapped into fresh VRAM (<2.3s DMA) to synthesize production code.
+    3. **Sandbox Execution**: Deterministically validates compilation/tests in an isolated sandbox (Kotlin/Gradle or Python).
+    4. **Debugger** (`Cyber-ATX Q5_K_M`): Swapped in (<2.3s DMA) to audit defects or security flaws.
+    5. **Closed-Loop Fix**: If defects exist, Debugger is expelled and Coder is swapped back into VRAM to correct the code.
+  ```bash
+  python pipeline/autonomous_pipeline.py --task "Create a high-performance telemetry engine"
+  ```
+
+---
+
+*(Optional Low-Level Mode)* **Native Multi-Instance Engine Sleep/Wake**: You can also run raw `llama-server.exe` instances on dedicated ports (e.g. `:8081`, `:8082`, `:8083`) with `LLAMAMPERE_ENABLE_SLEEP=1` and `--sleep-idle-seconds 3`. The engine calls `llama_model_sleep()` to unmap VRAM in `<60ms` when idle, and `llama_model_wake()` to reload via DMA in `<2.3s` upon receiving HTTP traffic.
 
 ---
 
 ## Hardware Scope & Memory Advisor (`router/memory_advisor.py`)
 
 ### Supported Engines
-* **`llamAmpere-Ultra` (SM86 Native)**: Includes Google TurboQuant kernels (`turbo2` through `turbo5`, `tq5_0`, `tq6_0`), SJ-KVaRN fused rotation codec (`GGML_SJKVARN_FUSED_ROT`), DeepSeek MLA compressed KV cache, and FlashAttention I8QK.
+* **`llamAmpere-Ultra` (SM86 Native)**: Built on **JakeATX's** native Ampere SM86 engine, featuring:
+  - **JakeATX's proprietary SJ-KVaRN fused rotation codec** (`GGML_SJKVARN_FUSED_ROT`): Fuses RoPE rotation, quantization, and memory packing into a single GPU kernel, eliminating prefill memory bandwidth bottlenecks across Qwen3.8, DeepSeek, and modern architectures.
+  - **JakeATX's custom fused Ampere Tensor Core implementations** of Google Research's TurboQuant algorithm (`turbo2` through `turbo5`, `tq5_0`, `tq6_0`) with asymmetric KV precision (`TURBO_AUTO_ASYMMETRIC`).
+  - **DeepSeek MLA compressed KV Cache** (`llama-kv-cache-dsv4.cpp`) and **InnerQ cross-channel equalization** (`turbo-innerq.cu`).
+  - **Ampere FlashAttention I8QK** (`GGML_CUDA_FA_I8QK`).
 * **`llama.cpp` Upstream (Patched)**: Standard GGML quantizations (`f16`, `q8_0`, `q5_0`, `q5_1`, `q4_0`, `q4_1`, `iq4_nl`).
 
 ### Excluded Engines (By Design)
