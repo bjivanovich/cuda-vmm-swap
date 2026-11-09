@@ -1,0 +1,9 @@
+{
+  "id": "vmm-swap",
+  "name": "CUDA VMM Hot-Swap",
+  "description": "Control Studio & Fast Model Swapping for Paseo (<2.3s VMM DMA)",
+  "media": [],
+  "requirements": {
+    "paseo": ">=0.15.3"
+  }
+}

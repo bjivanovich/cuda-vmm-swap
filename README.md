@@ -344,6 +344,36 @@ python pipeline/autonomous_pipeline.py --task "Create an async telemetry engine 
 
 ---
 
+## Official Extensions & Ecosystem Plugins
+
+To integrate `cuda-vmm-swap` directly into agentic desktop applications and developer IDEs, the following first-party extensions are included:
+
+### 1. Paseo Desktop UI Plugin (`extensions/paseo-vmm-swap`)
+A native desktop plugin for [Paseo](https://app.paseo.sh) built with the Paseo Plugin SDK (`@getpaseo/plugin`):
+* **Sidebar Screen**: Adds a dedicated `VMM Swap` navigation row and status screen in Paseo.
+* **Live Telemetry**: Real-time physical VRAM gauge and active model indicators polled every 3s via daemon RPCs (`vmm.status`).
+* **1-Click Model Swapping**: Touch-friendly buttons to command instant VMM hot-swaps to `architect`, `coder`, or `debugger` (`vmm.swap`).
+* **Web Studio Shortcut**: Direct link to open the full Web Control Studio in the browser.
+* **Installation in Paseo**:
+  ```bash
+  paseo plugin install extensions/paseo-vmm-swap
+  ```
+
+### 2. Pi-Coding-Agent Skill (`extensions/pi-coding-agent/SKILL.md`)
+An autonomous agent skill for `@mariozechner/pi-coding-agent`:
+* Teaches Pi how to orchestrate multi-agent roles (`architect` -> `coder` -> `debugger`) through `http://127.0.0.1:8000/v1`.
+* Enforces the Windows WDDM 50% pinned memory limit and strict VRAM eviction barrier.
+* Pre-installed in `~/.pi/agent/skills/vmm-swap/SKILL.md` for zero-configuration activation.
+
+### 3. Model Context Protocol (MCP) Server (`mcp/vmm_mcp_server.py`)
+Exposes 4 native tools for Paseo, Google Antigravity, Cursor, and Claude Desktop:
+* `vmm_list_models`: Discovers active residency and latencies.
+* `vmm_get_memory_budget`: Evaluates hardware VRAM, system RAM, and Windows WDDM limits for any GGUF model and KV format.
+* `vmm_swap_model`: Commands a sub-2.3s VMM swap.
+* `vmm_query_agent`: Queries a specialized agent role with transparent swap.
+
+---
+
 ## Hardware Scope & Memory Advisor (`router/memory_advisor.py`)
 
 ### Supported Engines
