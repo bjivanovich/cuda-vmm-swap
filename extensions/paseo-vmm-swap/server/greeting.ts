@@ -31,6 +31,7 @@ export async function getVmmStatus(_input: RpcInput<typeof vmmStatusRpc>) {
     }));
 
     return {
+      connected: true,
       active_vram_model: activeModel ?? null,
       staged_ram_model: data.staged_ram_model ?? null,
       physical_vram_used_mb: Number(data.physical_vram_used_mb ?? 0),
@@ -41,7 +42,8 @@ export async function getVmmStatus(_input: RpcInput<typeof vmmStatusRpc>) {
     };
   } catch (_err) {
     return {
-      active_vram_model: "offline",
+      connected: false,
+      active_vram_model: null,
       staged_ram_model: null,
       physical_vram_used_mb: 0,
       last_swap_latency_seconds: 0.0,

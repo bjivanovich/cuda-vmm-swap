@@ -16,6 +16,7 @@ export const vmmStatusRpc = defineRpc({
   name: "vmm.status",
   input: z.object({}),
   output: z.object({
+    connected: z.boolean(),
     active_vram_model: z.string().nullable(),
     staged_ram_model: z.string().nullable(),
     physical_vram_used_mb: z.number(),

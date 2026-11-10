@@ -75,6 +75,11 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
         padding: layout.compact ? 14 : 20,
         gap: 12,
       },
+      headerRow: {
+        flexDirection: "row" as const,
+        justifyContent: "space-between" as const,
+        alignItems: "center" as const,
+      },
       header: {
         fontSize: 16,
         fontWeight: "bold" as const,
@@ -126,6 +131,12 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
       badgeActive: {
         backgroundColor: theme.colors.accent,
       },
+      badgeOnline: {
+        backgroundColor: theme.colors.statusSuccess ?? "#3fb950",
+      },
+      badgeOffline: {
+        backgroundColor: theme.colors.statusDanger ?? "#e06c75",
+      },
       badgeText: {
         fontSize: 10,
         fontWeight: "bold" as const,
@@ -133,6 +144,9 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
       },
       badgeTextActive: {
         color: theme.colors.accentForeground,
+      },
+      badgeTextStatus: {
+        color: "#ffffff",
       },
       buttonRow: {
         flexDirection: "row" as const,
@@ -147,7 +161,7 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
         justifyContent: "center" as const,
       },
       buttonDisabled: {
-        opacity: 0.5,
+        opacity: 0.4,
       },
       buttonText: {
         fontSize: 11,
@@ -162,9 +176,17 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
         alignItems: "center" as const,
         justifyContent: "center" as const,
       },
+      secondaryButtonActive: {
+        backgroundColor: theme.colors.accent,
+      },
       secondaryButtonText: {
         fontSize: 11,
         color: theme.colors.foreground,
+      },
+      secondaryButtonTextActive: {
+        fontSize: 11,
+        fontWeight: "bold" as const,
+        color: theme.colors.accentForeground,
       },
       dangerButton: {
         paddingVertical: 8,
@@ -174,10 +196,18 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
         alignItems: "center" as const,
         justifyContent: "center" as const,
       },
+      dangerButtonDisabled: {
+        backgroundColor: theme.colors.surface2,
+        opacity: 0.5,
+      },
       dangerButtonText: {
         fontSize: 11,
         fontWeight: "bold" as const,
         color: "#ffffff",
+      },
+      dangerButtonTextDisabled: {
+        fontSize: 11,
+        color: theme.colors.foregroundMuted,
       },
       input: {
         backgroundColor: theme.colors.surface2,
@@ -193,27 +223,71 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
         color: theme.colors.foregroundMuted,
         marginTop: 4,
       },
+      bannerOffline: {
+        backgroundColor: theme.colors.surface1,
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.statusDanger ?? "#e06c75",
+        padding: 10,
+        borderRadius: 6,
+        gap: 4,
+      },
+      bannerOfflineTitle: {
+        fontSize: 12,
+        fontWeight: "bold" as const,
+        color: theme.colors.statusDanger ?? "#e06c75",
+      },
+      bannerOfflineText: {
+        fontSize: 11,
+        color: theme.colors.foregroundMuted,
+      },
     }),
     [theme, layout.compact],
   );
 
   const status = statusQuery.data;
+  const isConnected = Boolean(status?.connected);
+  const activeModel = status?.active_vram_model;
+  const hasActiveModel = Boolean(activeModel && activeModel !== "offline");
   const models = status?.models ?? [];
+  const swapEnabled = Boolean(status?.swap_enabled);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.header}>[CUDA-VMM-SWAP] Studio</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>[CUDA-VMM-SWAP] Studio</Text>
+        <View style={[styles.badge, isConnected ? styles.badgeOnline : styles.badgeOffline]}>
+          <Text style={[styles.badgeText, styles.badgeTextStatus]}>
+            {isConnected ? "ROUTER ONLINE (:8000)" : "ROUTER OFFLINE"}
+          </Text>
+        </View>
+      </View>
       <Text style={styles.subHeader}>
         Dynamic N-Agent VMM Hot-Swap Engine | Windows WDDM Aware
       </Text>
+
+      {/* OFFLINE WARNING BANNER */}
+      {!isConnected && (
+        <View style={styles.bannerOffline}>
+          <Text style={styles.bannerOfflineTitle}>VMM Router Not Responding on 127.0.0.1:8000</Text>
+          <Text style={styles.bannerOfflineText}>
+            Launch the backend supervisor in your terminal:
+          </Text>
+          <Text style={[styles.value, { fontSize: 11, color: theme.colors.foreground }]}>
+            python master_harness.py
+          </Text>
+          <Text style={[styles.bannerOfflineText, { fontSize: 10 }]}>
+            (Or: python router/vmm_router.py)
+          </Text>
+        </View>
+      )}
 
       {/* TELEMETRY CARD */}
       <View style={styles.card}>
         <View style={styles.statRow}>
           <Text style={styles.label}>Active in VRAM:</Text>
-          <View style={[styles.badge, status?.active_vram_model ? styles.badgeActive : null]}>
-            <Text style={[styles.badgeText, status?.active_vram_model ? styles.badgeTextActive : null]}>
-              {(status?.active_vram_model ?? "OFFLINE").toUpperCase()}
+          <View style={[styles.badge, hasActiveModel ? styles.badgeActive : null]}>
+            <Text style={[styles.badgeText, hasActiveModel ? styles.badgeTextActive : null]}>
+              {hasActiveModel ? activeModel!.toUpperCase() : (isConnected ? "NONE (FREE VRAM)" : "OFFLINE")}
             </Text>
           </View>
         </View>
@@ -229,26 +303,44 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
         </View>
         <View style={styles.statRow}>
           <Text style={styles.label}>Swap Mode:</Text>
-          <Text style={styles.value}>{status?.swap_enabled ? "DYNAMIC SWAP" : "SINGLE MODEL"}</Text>
+          <View style={[styles.badge, swapEnabled ? styles.badgeActive : null]}>
+            <Text style={[styles.badgeText, swapEnabled ? styles.badgeTextActive : null]}>
+              {swapEnabled ? "DYNAMIC N-SWAP: ON" : "SINGLE-MODEL: OFF"}
+            </Text>
+          </View>
         </View>
 
         {/* ACTION CONTROLS */}
         <View style={[styles.buttonRow, { marginTop: 6 }]}>
           <Pressable
             accessibilityRole="button"
-            style={[styles.secondaryButton, { flex: 1 }]}
+            style={[
+              styles.secondaryButton,
+              swapEnabled ? styles.secondaryButtonActive : null,
+              !isConnected ? styles.buttonDisabled : null,
+              { flex: 1 },
+            ]}
+            disabled={!isConnected}
             onPress={() => toggleMutation.mutate({})}
           >
-            <Text style={styles.secondaryButtonText}>
-              {status?.swap_enabled ? "Disable Swap" : "Enable Swap"}
+            <Text style={swapEnabled ? styles.secondaryButtonTextActive : styles.secondaryButtonText}>
+              {swapEnabled ? "Disable Swap Mode" : "Enable Swap Mode"}
             </Text>
           </Pressable>
+
           <Pressable
             accessibilityRole="button"
-            style={[styles.dangerButton, { flex: 1 }]}
+            style={[
+              hasActiveModel ? styles.dangerButton : styles.dangerButtonDisabled,
+              !isConnected || !hasActiveModel ? styles.buttonDisabled : null,
+              { flex: 1 },
+            ]}
+            disabled={!isConnected || !hasActiveModel}
             onPress={() => evictMutation.mutate({})}
           >
-            <Text style={styles.dangerButtonText}>Evict VRAM (&lt;60ms)</Text>
+            <Text style={hasActiveModel ? styles.dangerButtonText : styles.dangerButtonTextDisabled}>
+              {hasActiveModel ? `Evict VRAM (<60ms)` : `VRAM Clear`}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -285,8 +377,12 @@ export function VmmControlScreen({ theme, layout }: PluginScreenProps) {
 
             <Pressable
               accessibilityRole="button"
-              style={[styles.button, isCurrent ? styles.buttonDisabled : null, { marginTop: 4 }]}
-              disabled={isCurrent}
+              style={[
+                styles.button,
+                isCurrent || !isConnected ? styles.buttonDisabled : null,
+                { marginTop: 4 },
+              ]}
+              disabled={isCurrent || !isConnected}
               onPress={() => swapMutation.mutate({ model: m.id })}
             >
               <Text style={styles.buttonText}>
