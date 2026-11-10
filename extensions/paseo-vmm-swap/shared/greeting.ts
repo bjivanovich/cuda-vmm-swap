@@ -37,7 +37,7 @@ export const vmmSwapRpc = defineRpc({
 });
 
 export const vmmToggleSwapRpc = defineRpc({
-  name: "vmm.toggleSwap",
+  name: "vmm.toggle_swap",
   input: z.object({}),
   output: z.object({
     swap_enabled: z.boolean(),
@@ -45,7 +45,7 @@ export const vmmToggleSwapRpc = defineRpc({
 });
 
 export const vmmEvictRpc = defineRpc({
-  name: "vmm.evictAll",
+  name: "vmm.evict_all",
   input: z.object({}),
   output: z.object({
     status: z.string(),
@@ -54,7 +54,7 @@ export const vmmEvictRpc = defineRpc({
 });
 
 export const vmmConfigureModelRpc = defineRpc({
-  name: "vmm.configureModel",
+  name: "vmm.configure_model",
   input: z.object({
     id: z.string(),
     model_path: z.string(),
