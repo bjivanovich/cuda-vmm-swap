@@ -103,10 +103,10 @@ All models tested originate from `D:\models` (covering 13 GB to 78 GB on disk). 
 | **Gyro-Coder MoE**| `TQ2_0` (Expert Layers) | 75.80 GB* | **19.9 GB** | **2.290 s** | < 60 ms |
 | **PCIe Gen4 x16** | — | — | — | **8.44 - 8.50 GB/s** | — |
 
-> **Architectural Note on Gyro-Coder (75.8 GB on disk):**
-> * **19.9 GB VRAM Tensor Layers**: Only the active expert layers (19.9 GB) are loaded into GPU VRAM and participate in the VMM RAM↔VRAM swap.
-> * **54–58 GB PLE N-Gram Table**: Operates in Q8/A8 and resides strictly on high-speed NVMe SSD, accessed via zero-latency kernel memory mapping (`mmap`). It does **not** consume VRAM or host RAM during swap.
-> * Because 19.9 GB is under the 24 GB Windows WDDM pinned memory cap, Gyro-Coder participates completely in sub-2.3s VMM hot-swapping!
+> **Architectural Note on Gyro-Coder Decoupled Modular Architecture (llamAmpere-Ultra v0.7.2+):**
+> * **19.9 GB VRAM Tensor Layers (`-noPLE.gguf`)**: The active expert base model is decoupled from the embedding table, loading only the 19.93 GB transformer weights into VRAM and participating in the VMM RAM↔VRAM swap.
+> * **50.6 GB Modular External PLE Table (`--ple <path>`)**: Operates in Q8_0 (`per_layer_token_embd.weight`) and resides strictly on high-speed NVMe SSD, mapped dynamically via zero-latency kernel memory mapping (`TENSOR_READ_LAZY`). It consumes **0 MB VRAM** and **0 MB pinned RAM** during swap.
+> * Because 19.9 GB is comfortably below the 24 GB Windows WDDM pinned memory cap, Gyro-Coder participates completely in sub-2.3s VMM hot-swapping!
 
 ---
 
@@ -391,6 +391,7 @@ $env:GGML_CUDA_FA_I8QK        = "1"
   - **JakeATX's custom fused Ampere Tensor Core implementations** of Google Research's TurboQuant algorithm (`turbo2` through `turbo5`, `tq5_0`, `tq6_0`) with asymmetric KV precision (`TURBO_AUTO_ASYMMETRIC`).
   - **DeepSeek MLA compressed KV Cache** (`llama-kv-cache-dsv4.cpp`) and **InnerQ cross-channel equalization** (`turbo-innerq.cu`).
   - **Ampere FlashAttention I8QK** (`GGML_CUDA_FA_I8QK`).
+  - **Modular External PLE Table Support (`--ple` / `LLAMA_PLE_GGUF`)**: Dynamically decouples massive embedding tables (e.g. 50.6 GB Qwen3.8-Flash-Next PLE) into separate GGUF files loaded via lazy NVMe kernel memory-mapping (`TENSOR_READ_LAZY`), enabling massive MoE models (`-noPLE.gguf`, ~19.9 GB) to stay well within the Windows WDDM 50% pinned RAM cap.
 * **`llama.cpp` Upstream (Patched)**: Standard GGML quantizations (`f16`, `q8_0`, `q5_0`, `q5_1`, `q4_0`, `q4_1`, `iq4_nl`).
 
 ### Excluded Engines (By Design)

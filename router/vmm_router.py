@@ -98,9 +98,35 @@ def load_config() -> Dict[str, Any]:
     models = data.get("models", {})
     for m_key, m_val in models.items():
         if "model_path" in m_val:
-            m_val["model_path"] = os.path.expandvars(m_val["model_path"])
+            m_path = os.path.expandvars(m_val["model_path"])
+            # Auto-detect decoupled -noPLE.gguf model if monolithic .gguf is missing
+            if not os.path.isfile(m_path):
+                nople_candidate = m_path.replace(".gguf", "-noPLE.gguf")
+                if os.path.isfile(nople_candidate):
+                    logger.info(f"Auto-resolved model '{m_key}' to decoupled model: {nople_candidate}")
+                    m_path = nople_candidate
+            m_val["model_path"] = m_path
+
         if "args" in m_val:
-            m_val["args"] = [os.path.expandvars(arg) for arg in m_val["args"]]
+            expanded_args = [os.path.expandvars(arg) for arg in m_val["args"]]
+            # Auto-detect and wire companion PLE table for decoupled models if not already specified
+            if "--ple" not in expanded_args:
+                env_ple = os.environ.get("LLAMA_PLE_GGUF") or os.environ.get("LLAMA_ARG_PLE")
+                if env_ple and os.path.isfile(env_ple):
+                    logger.info(f"Injecting external PLE table from environment: {env_ple}")
+                    expanded_args = ["--ple", env_ple] + expanded_args
+                elif "model_path" in m_val and "-noPLE" in m_val["model_path"]:
+                    model_dir = os.path.dirname(m_val["model_path"])
+                    ple_candidates = [
+                        os.path.join(model_dir, "Qwen3.8-Flash-Next-PLE-Q8_0.gguf"),
+                        os.path.join(model_dir, "ple-table.gguf")
+                    ]
+                    for ple_cand in ple_candidates:
+                        if os.path.isfile(ple_cand):
+                            logger.info(f"Auto-injecting companion modular PLE table: {ple_cand}")
+                            expanded_args = ["--ple", ple_cand] + expanded_args
+                            break
+            m_val["args"] = expanded_args
     return data
 
 

@@ -210,7 +210,9 @@ r_alloc = """static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_bu
     return ggml_backend_buffer_init(buft, ggml_backend_cuda_buffer_interface, ctx, size);
 }"""
 
-if t_alloc in cuda_code:
+if "bool is_vmm = false;" in cuda_code or "ctx->is_vmm = is_vmm;" in cuda_code:
+    print("SKIP: ggml_backend_cuda_buffer_type_alloc_buffer already patched.")
+elif t_alloc in cuda_code:
     cuda_code = cuda_code.replace(t_alloc, r_alloc, 1)
     print("Patched: ggml_backend_cuda_buffer_type_alloc_buffer.")
 else:
@@ -343,7 +345,9 @@ r_sleep = """    void handle_sleeping_state(bool new_state) {
         sleeping = new_state;
     }"""
 
-if t_sleep in srv_code:
+if "llama_model_sleep(model_tgt)" in srv_code:
+    print("SKIP: handle_sleeping_state already patched.")
+elif t_sleep in srv_code:
     srv_code = srv_code.replace(t_sleep, r_sleep, 1)
     print("Patched: handle_sleeping_state in server-context.cpp.")
 else:

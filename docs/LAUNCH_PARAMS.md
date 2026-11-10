@@ -130,7 +130,7 @@ $env:GGML_CUDA_GRAPH_OPT = "1"
 ### B. Coder: `Gyro-Coder TQ2_0` (AgentionAI)
 * **Role**: Synthesis of clean, idiomatic code with near-zero syntax errors via 70B MoE knowledge and A8 PLE N-Gram table.
 * **Engine**: `AgentionAI llama.cpp`
-* **VRAM**: 19.9 GB (expert layers). N-Gram table (~54-58 GB) accessed on NVMe via `mmap`.
+* **VRAM**: 19.9 GB (expert base model `-noPLE`). Modular PLE table (`--ple`, ~50.6 GB) accessed dynamically on NVMe via lazy `mmap` (0 MB VRAM, 0 MB pinned RAM).
 * **KV Cache**: `q8_0` for both Key and Value.
 
 ```powershell
@@ -139,8 +139,9 @@ $env:GGML_CUDA_GRAPH_OPT = "1"
 $env:LLAMAMPERE_ENABLE_SLEEP = "1"
 
 .\build-sm86\bin\Release\llama-server.exe `
-  -m "D:/models/Qwen3.8-Flash-Next-Gyro-Coder-TQ2_0.gguf" `
-  -ngl 99 `
+  -m "D:/models/Qwen3.8-Flash-Next-Gyro-Coder-TQ2_0-noPLE.gguf" `
+  --ple "D:/models/Qwen3.8-Flash-Next-PLE-Q8_0.gguf" `
+  -ngl 999 `
   -c 98304 `
   -ctk q8_0 `
   -ctv q8_0 `

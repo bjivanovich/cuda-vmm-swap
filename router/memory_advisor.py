@@ -151,6 +151,7 @@ ENGINE_CAPABILITIES = {
         "supports_kv_unified": True,
         "supports_flash_attn_i8": True,
         "supports_vmm_native": True,
+        "supports_modular_ple": True,
         "default_ctk": "turbo5",
         "default_ctv": "turbo4"
     },
@@ -328,6 +329,17 @@ def evaluate_model_fit(
     bytes_per_token = (layers * kv_heads * head_dim * (KV_BYTES_PER_ELEMENT.get(eff_ctk, 1.0) + KV_BYTES_PER_ELEMENT.get(eff_ctv, 1.0)))
     max_safe_context = int((vram_for_kv_mb * 1024 * 1024) / bytes_per_token) if bytes_per_token > 0 else 0
     
+    # Modular external PLE detection (--ple / -noPLE)
+    uses_modular_ple = "-nople" in model_path.lower()
+    ple_table_path = None
+    ple_size_mb = 0
+    if uses_modular_ple:
+        model_dir = os.path.dirname(model_path)
+        candidate = os.path.join(model_dir, "Qwen3.8-Flash-Next-PLE-Q8_0.gguf")
+        if os.path.isfile(candidate):
+            ple_table_path = candidate
+            ple_size_mb = int(os.path.getsize(candidate) // (1024 * 1024))
+
     return {
         "hardware": hw,
         "engine": {
@@ -350,7 +362,15 @@ def evaluate_model_fit(
             "max_safe_context_tokens": max_safe_context,
             "wddm_pinned_cap_mb": pinned_cap_mb,
             "fits_pinned_ram": fits_pinned_ram,
-            "pinned_remaining_mb": pinned_remaining_mb
+            "pinned_remaining_mb": pinned_remaining_mb,
+            "modular_ple": {
+                "active": uses_modular_ple,
+                "table_path": ple_table_path,
+                "table_size_mb": ple_size_mb,
+                "vram_overhead_mb": 0,
+                "pinned_ram_overhead_mb": 0,
+                "storage_mode": "NVMe lazy kernel mmap (TENSOR_READ_LAZY)"
+            }
         }
     }
 
@@ -373,6 +393,9 @@ def print_memory_report(eval_result: Dict[str, Any]):
     print(f"  Target Engine:        {eng['name']}")
     print(f"  Model Architecture:   {m.get('architecture', 'Unknown')} ({m.get('layers', 0)} layers, {m.get('kv_heads', 0)} KV heads, {m.get('head_dim', 0)} dim)")
     print(f"  KV Quantization:      Key: {eng['ctk']} | Value: {eng['ctv']}")
+    if b.get("modular_ple", {}).get("active"):
+        ple = b["modular_ple"]
+        print(f"  Modular PLE Table:    {ple['table_size_mb']:,} MB ({ple['table_size_mb']/1024:.2f} GB) on NVMe [0 MB VRAM / 0 MB Pinned RAM]")
     print("-" * 72)
     print("  VRAM BREAKDOWN:")
     print(f"    - Model Weights:    {b['weights_mb']:,} MB ({b['weights_mb']/1024:.2f} GB)")

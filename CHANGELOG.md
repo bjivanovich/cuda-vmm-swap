@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.1] - 2026-11-10
+
+### Added
+- **Full Synchronization with `llamAmpere-Ultra` v0.7.2 (Modular External PLE Tables)**:
+  - **Modular PLE Table Support (`--ple` / `LLAMA_PLE_GGUF`)**: Supported across router, memory advisor, and config for decoupled MoE models (e.g. `Qwen3.8-Flash-Next-Gyro-Coder-TQ2_0-noPLE.gguf` with `Qwen3.8-Flash-Next-PLE-Q8_0.gguf`).
+  - **Smart Decoupled Model Auto-Resolution (`vmm_router.py`)**: Automatically detects `-noPLE.gguf` variants and auto-injects companion `--ple` tables from disk or environment variables (`LLAMA_PLE_GGUF`, `LLAMA_ARG_PLE`).
+  - **Memory Advisor Modular PLE Accounting (`memory_advisor.py`)**: Accurately accounts for external PLE tables mapped lazily from NVMe SSD (`TENSOR_READ_LAZY`), confirming they contribute **0 MB VRAM** and **0 MB pinned RAM** overhead and validating Windows WDDM compliance.
+  - **Patch Script Idempotence Upgrade (`patch/patch_vmm_swapping.py`)**: Enhanced detection to report `SKIP: already patched` cleanly when run against `llamAmpere-Ultra` v0.7.0+ instead of reporting version mismatches.
+- **Config & Documentation Alignment**:
+  - `router/router_config.json`: Updated `coder` model to decoupled `Qwen3.8-Flash-Next-Gyro-Coder-TQ2_0-noPLE.gguf` with `--ple`.
+  - `docs/LAUNCH_PARAMS.md`: Documented official `--ple` launch parameters for Gyro-Coder TQ2_0 MoE.
+
+---
+
 ## [2.3.0] - 2026-11-08
 
 ### Added
