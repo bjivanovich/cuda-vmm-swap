@@ -290,8 +290,37 @@
   <!-- CONFIGURED SLOTS (ROLES) -->
   <div class="card" style="margin-bottom: 16px;">
     <div class="card-title">
-      <span>Configured Model Slots & Memory Budgets</span>
-      <span style="font-size: 11px; color: var(--text-muted);">Evaluated via GGUF Tensor Parser</span>
+      <span>Configured Agent Model Slots (N-Agent Support)</span>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-sm" onclick="toggleAddForm()">+ Add / Choose Model</button>
+      </div>
+    </div>
+
+    <!-- Collapsible Add Form -->
+    <div id="add-agent-form" style="display: none; background: #0d1117; padding: 12px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 12px;">
+      <div style="font-weight: 700; font-size: 12px; margin-bottom: 8px;">Add / Customize Agent Model Slot</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px;">
+        <div>
+          <label style="font-size: 10px; color: var(--text-muted);">Agent Role ID (e.g. coder, tester, architect):</label>
+          <input type="text" id="new-agent-id" placeholder="e.g. coder, tester" style="width: 100%; font-size: 11px;">
+        </div>
+        <div>
+          <label style="font-size: 10px; color: var(--text-muted);">GGUF Model Path:</label>
+          <input type="text" id="new-agent-path" placeholder="D:/models/your-model.gguf" style="width: 100%; font-size: 11px;">
+        </div>
+        <div>
+          <label style="font-size: 10px; color: var(--text-muted);">Friendly Alias:</label>
+          <input type="text" id="new-agent-alias" placeholder="e.g. Qwen3.8-Coder" style="width: 100%; font-size: 11px;">
+        </div>
+        <div>
+          <label style="font-size: 10px; color: var(--text-muted);">Context Tokens:</label>
+          <input type="number" id="new-agent-ctx" value="98304" style="width: 100%; font-size: 11px;">
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button class="btn btn-sm btn-primary" onclick="saveAgentSlot()">Save Agent Slot</button>
+        <button class="btn btn-sm" onclick="toggleAddForm()">Cancel</button>
+      </div>
     </div>
     <div id="slots-container" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
       <!-- Injected via JavaScript -->
@@ -370,6 +399,20 @@
       const models = data.models || {};
       const activeModel = data.active_vram_model;
 
+      // Populate dispatch target dropdown dynamically
+      const select = document.getElementById("dispatch-target");
+      if (select) {
+        const prevVal = select.value;
+        select.innerHTML = "";
+        for (const [key, info] of Object.entries(models)) {
+          const opt = document.createElement("option");
+          opt.value = key;
+          opt.textContent = `${info.alias || key.toUpperCase()} (${key})`;
+          if (key === prevVal) opt.selected = true;
+          select.appendChild(opt);
+        }
+      }
+
       for (const [key, info] of Object.entries(models)) {
         const isActive = (key === activeModel);
         const card = document.createElement("div");
@@ -438,6 +481,38 @@
         refreshStatus();
       } catch (e) {
         logMsg(`Eviction failed: ${e}`);
+      }
+    }
+
+    function toggleAddForm() {
+      const form = document.getElementById("add-agent-form");
+      form.style.display = (form.style.display === "none") ? "block" : "none";
+    }
+
+    async function saveAgentSlot() {
+      const id = document.getElementById("new-agent-id").value.trim();
+      const model_path = document.getElementById("new-agent-path").value.trim();
+      const alias = document.getElementById("new-agent-alias").value.trim();
+      const context = parseInt(document.getElementById("new-agent-ctx").value) || 98304;
+
+      if (!id || !model_path) {
+        alert("Please enter both Agent Role ID and Model Path.");
+        return;
+      }
+
+      logMsg(`Saving agent slot '${id}' -> '${model_path}'...`);
+      try {
+        const res = await fetch("/api/models/configure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, model_path, alias, context })
+        });
+        const data = await res.json();
+        logMsg(`Agent slot '${id}' registered successfully.`);
+        toggleAddForm();
+        refreshStatus();
+      } catch (e) {
+        logMsg(`Failed to save agent slot: ${e}`);
       }
     }
 

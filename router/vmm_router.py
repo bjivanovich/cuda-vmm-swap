@@ -83,6 +83,23 @@ def resolve_engine_executable(configured_path: str) -> str:
     return configured_path
 
 
+def save_config_file():
+    """Persists active MODELS and configuration back to router_config.json."""
+    try:
+        current_data = {}
+        if os.path.isfile(CONFIG_PATH):
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                current_data = json.load(f)
+        current_data["models"] = MODELS
+        current_data["aliases"] = ALIASES
+        current_data["swap_enabled"] = state.swap_enabled
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(current_data, f, indent=2)
+        logger.info(f"Updated configuration saved to {CONFIG_PATH}")
+    except Exception as e:
+        logger.error(f"Failed to save configuration: {e}")
+
+
 def load_config() -> Dict[str, Any]:
     if not os.path.isfile(CONFIG_PATH):
         raise FileNotFoundError(f"Configuration file missing: {CONFIG_PATH}")
@@ -483,6 +500,95 @@ async def evict_all():
     state.active_vram_model = None
     time.sleep(0.5)
     return {"status": "evicted", "vram_used_mb": get_gpu_vram_used_mb()}
+
+
+@app.post("/api/models/configure")
+async def configure_model(request: Request):
+    """Dynamically configures or registers an N-agent model slot at runtime."""
+    body = await request.json()
+    model_id = (body.get("id") or body.get("name") or "").lower().strip()
+    if not model_id:
+        raise HTTPException(status_code=400, detail="Missing required 'id' or 'name'")
+
+    model_path = os.path.expandvars(body.get("model_path", ""))
+    alias = body.get("alias") or model_id.title()
+    role = body.get("role") or f"Agent ({alias})"
+    context = int(body.get("context", 98304))
+    backend_port = int(body.get("backend_port", 8081 + len(MODELS)))
+    ctk = body.get("ctk", "turbo5" if "turbo" in model_path.lower() else "q8_0")
+    ctv = body.get("ctv", "turbo4" if "turbo" in model_path.lower() else "q8_0")
+
+    # If backend for this model is running and path changed, shut it down so it restarts fresh
+    if model_id in state.running_processes:
+        proc = state.running_processes.pop(model_id, None)
+        if proc:
+            proc.terminate()
+
+    # Build default args if not explicitly provided
+    args = body.get("args")
+    if not args:
+        args = [
+            "-ngl", "999",
+            "-c", str(context),
+            "-ctk", ctk,
+            "-ctv", ctv,
+            "-b", "2048",
+            "-ub", "512",
+            "-t", "8",
+            "-tb", "8",
+            "-fa", "on",
+            "--parallel", "1",
+            "--prio", "3",
+            "--alias", alias
+        ]
+        ple_path = body.get("ple_path")
+        if ple_path:
+            args = ["--ple", os.path.expandvars(ple_path)] + args
+
+    MODELS[model_id] = {
+        "alias": alias,
+        "model_path": model_path,
+        "backend_port": backend_port,
+        "role": role,
+        "context": context,
+        "ctk": ctk,
+        "ctv": ctv,
+        "args": args
+    }
+    ALIASES[alias.lower()] = model_id
+    save_config_file()
+
+    logger.info(f"Registered model slot '{model_id}' (Total slots: {len(MODELS)})")
+    return {
+        "status": "success",
+        "model_id": model_id,
+        "configured_models": list(MODELS.keys()),
+        "models": MODELS
+    }
+
+
+@app.delete("/api/models/{model_id}")
+async def delete_model(model_id: str):
+    """Removes a model slot from active registry and terminates its backend if active."""
+    m_id = model_id.lower().strip()
+    if m_id not in MODELS:
+        raise HTTPException(status_code=404, detail=f"Model slot '{m_id}' not found")
+    
+    if m_id in state.running_processes:
+        proc = state.running_processes.pop(m_id, None)
+        if proc:
+            proc.terminate()
+            
+    if state.active_vram_model == m_id:
+        state.active_vram_model = None
+
+    del MODELS[m_id]
+    save_config_file()
+    return {
+        "status": "deleted",
+        "model_id": m_id,
+        "configured_models": list(MODELS.keys())
+    }
 
 
 @app.post("/api/evaluate")

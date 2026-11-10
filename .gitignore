@@ -23,6 +23,10 @@ __pycache__/
 Thumbs.db
 desktop.ini
 
+# Node.js
+node_modules/
+package-lock.json
+
 # Logs and outputs
 *.log
 pipeline_output/

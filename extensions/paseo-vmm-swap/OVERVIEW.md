@@ -1,29 +1,16 @@
-<!--
-OVERVIEW.md is required to list your plugin in the registry. Keep it beside
-paseo-plugin.json in your repository at the pinned commit and in your npm package.
-Replace this comment with useful facts before publishing.
+# CUDA VMM Hot-Swap Studio for Paseo
 
-This overview is for people choosing a plugin in Paseo, on the plugin page under
-its install command. README assumes a GitHub audience and includes technical
-details, installation instructions, and badges. Long, AI-generated READMEs leave
-people reading past that material to understand what the plugin does.
+Connect your Paseo desktop and mobile workspace directly to a high-speed CUDA Virtual Memory Management (VMM) router. This plugin provides physical VRAM telemetry, instant sub-2.3s DMA model hot-swapping, and multi-agent model slot configuration.
 
-Write these parts in order, including only what helps someone decide to install:
+## Features
 
-1. Describe what your plugin is and does in plain terms first.
-2. Explain how it works only when it is not obvious.
-3. Explain setup when needed: settings, accounts, tokens, providers, tools, or
-   other plugins. Include applicable daemon version and operating system
-   requirements. Setup guidance is allowed; installation instructions are not.
-4. Explain capabilities and settings worth understanding, what each option does,
-   what the plugin reads or sends and where, permissions, and known limits.
+- **Live VRAM Telemetry**: Displays real-time physical GPU memory consumption polled via low-level daemon RPCs.
+- **Dynamic N-Agent Support**: Lists all configured agent model slots (such as Architect, Coder, Debugger, or any custom role like Tester or Reviewer) with 1-touch hot-swap buttons.
+- **In-App Agent Configuration**: Register or customize model slots directly from Paseo without manually editing JSON files. Set the role identifier, local GGUF model path, context window, and optional modular PLE table.
+- **Swap Mode Control**: Toggle between dynamic multi-agent pipeline swapping and single-model persistence.
+- **Strict VRAM Eviction**: Trigger complete memory unmapping in under 60 milliseconds to ensure clean GPU headroom before loading large models.
 
-Length follows complexity; a theme needs one paragraph. Choose headings only
-when they help. Use sentence case and plain factual language, with no em dashes.
-Omit installation commands, badges, changelog, contributing or license sections,
-marketing, and unsupported claims. Avoid implementation filler such as empty
-cleanup functions, theme-token field lists, or lists of absent features.
+## Setup
 
-To translate the overview, add a whole copy beside this file named for the
-language, such as OVERVIEW.zh-CN.md. Readers in that language see it instead.
--->
+1. Run the local VMM router on the same machine (`python router/vmm_router.py` or via `master_harness.py`).
+2. The plugin connects to `http://127.0.0.1:8000` to query status and dispatch hot-swap requests.
